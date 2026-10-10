@@ -13,7 +13,6 @@ import (
 )
 
 func TestHandleCommand(t *testing.T) {
-
 	trigger := "remind"
 
 	user := &model.User{
@@ -22,7 +21,6 @@ func TestHandleCommand(t *testing.T) {
 	}
 
 	t.Run("/remind", func(t *testing.T) {
-
 		setupAPI := func() *plugintest.API {
 			api := &plugintest.API{}
 			api.On("LogDebug", mock.Anything, mock.Anything, mock.Anything).Maybe()
@@ -51,7 +49,6 @@ func TestHandleCommand(t *testing.T) {
 	})
 
 	t.Run("/remind help", func(t *testing.T) {
-
 		setupAPI := func() *plugintest.API {
 			api := &plugintest.API{}
 			api.On("LogDebug", mock.Anything, mock.Anything, mock.Anything).Maybe()
@@ -79,7 +76,6 @@ func TestHandleCommand(t *testing.T) {
 	})
 
 	t.Run("/remind list", func(t *testing.T) {
-
 		channel := &model.Channel{
 			Id:   model.NewId(),
 			Name: model.NewRandomString(10),
@@ -141,7 +137,6 @@ func TestHandleCommand(t *testing.T) {
 	})
 
 	t.Run("/remind me foo in 2 seconds", func(t *testing.T) {
-
 		channel := &model.Channel{
 			Id:   model.NewId(),
 			Name: model.NewRandomString(10),
@@ -207,7 +202,6 @@ func TestHandleCommand(t *testing.T) {
 	})
 
 	t.Run("/remind __clear", func(t *testing.T) {
-
 		testTime := time.Now().UTC().Round(time.Second)
 
 		occurrences := []Occurrence{
@@ -260,7 +254,6 @@ func TestHandleCommand(t *testing.T) {
 	})
 
 	t.Run("/remind __version", func(t *testing.T) {
-
 		channel := &model.Channel{
 			Id:   model.NewId(),
 			Name: model.NewRandomString(10),
@@ -298,7 +291,6 @@ func TestHandleCommand(t *testing.T) {
 	})
 
 	t.Run("/remind __user", func(t *testing.T) {
-
 		setupAPI := func() *plugintest.API {
 			api := &plugintest.API{}
 			api.On("LogDebug", mock.Anything, mock.Anything, mock.Anything).Maybe()

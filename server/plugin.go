@@ -35,7 +35,7 @@ type Plugin struct {
 	client *pluginapi.Client
 
 	router    *mux.Router
-	botUserId string
+	botUserID string
 	emptyTime time.Time
 
 	// running and generation are touched by the reminder tick goroutine as well as
@@ -71,7 +71,7 @@ func (p *Plugin) OnActivate() error {
 	if err != nil {
 		return errors.Wrap(err, "failed to ensure remind bot")
 	}
-	p.botUserId = botID
+	p.botUserID = botID
 
 	err = p.registerCommand()
 	if err != nil {

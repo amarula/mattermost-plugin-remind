@@ -2,18 +2,18 @@ package main
 
 import (
 	"testing"
-	//"encoding/json"
-	//"time"
+	// "encoding/json"
+	// "time"
 
 	"github.com/mattermost/mattermost/server/public/model"
 	"github.com/mattermost/mattermost/server/public/plugin/plugintest"
-	//"github.com/stretchr/testify/assert"
+
+	// "github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
 
-func TestScheduleReminders(t *testing.T) {
-
-	//user := &model.User{
+func TestScheduleReminders(_ *testing.T) {
+	// user := &model.User{
 	//	Email:    "-@-.-",
 	//	Nickname: "TestUser",
 	//	Password: model.NewId(),
@@ -22,7 +22,7 @@ func TestScheduleReminders(t *testing.T) {
 	//	Locale:   "en",
 	//}
 	//
-	//occurrences := []Occurrence{
+	// occurrences := []Occurrence{
 	//	{
 	//		Id: model.NewId(),
 	//		ReminderId: model.NewId(),
@@ -30,12 +30,12 @@ func TestScheduleReminders(t *testing.T) {
 	//	},
 	//}
 	//
-	//stringOccurrences, _ := json.Marshal(occurrences)
-	//channel := &model.Channel{
+	// stringOccurrences, _ := json.Marshal(occurrences)
+	// channel := &model.Channel{
 	//	Id: model.NewId(),
 	//}
 	//
-	//setupAPI := func() *plugintest.API {
+	// setupAPI := func() *plugintest.API {
 	//	api := &plugintest.API{}
 	//	api.On("LogDebug", mock.Anything, mock.Anything, mock.Anything).Maybe()
 	//	api.On("LogInfo", mock.Anything).Maybe()
@@ -45,7 +45,7 @@ func TestScheduleReminders(t *testing.T) {
 	//	return api
 	//}
 	//
-	//t.Run("if scheduled reminder" , func(t *testing.T) {
+	// t.Run("if scheduled reminder" , func(t *testing.T) {
 	//
 	//	api := setupAPI()
 	//	defer api.AssertExpectations(t)
@@ -61,12 +61,10 @@ func TestScheduleReminders(t *testing.T) {
 	//	assert.Nil(t, err)
 	//	assert.Equal(t, len(post.Attachments()), 2)
 	//
-	//})
-
+	// })
 }
 
 func TestInteractiveSchedule(t *testing.T) {
-
 	user := &model.User{
 		Email:    "-@-.-",
 		Nickname: "TestUser",
@@ -76,7 +74,7 @@ func TestInteractiveSchedule(t *testing.T) {
 		Locale:   "en",
 	}
 
-	//occurrences := []Occurrence{
+	// occurrences := []Occurrence{
 	//	{
 	//		Id: model.NewId(),
 	//		ReminderId: model.NewId(),
@@ -84,23 +82,22 @@ func TestInteractiveSchedule(t *testing.T) {
 	//	},
 	//}
 	//
-	//stringOccurrences, _ := json.Marshal(occurrences)
-	//channel := &model.Channel{
+	// stringOccurrences, _ := json.Marshal(occurrences)
+	// channel := &model.Channel{
 	//	Id: model.NewId(),
 	//}
 
 	setupAPI := func() *plugintest.API {
 		api := &plugintest.API{}
-		//api.On("LogDebug", mock.Anything, mock.Anything, mock.Anything).Maybe()
-		//api.On("LogInfo", mock.Anything).Maybe()
+		// api.On("LogDebug", mock.Anything, mock.Anything, mock.Anything).Maybe()
+		// api.On("LogInfo", mock.Anything).Maybe()
 		api.On("OpenInteractiveDialog", mock.AnythingOfType("model.OpenDialogRequest")).Return(nil)
-		//api.On("KVGet", mock.AnythingOfType("string")).Return(stringOccurrences, nil)
-		//api.On("KVSet", mock.AnythingOfType("string"), stringOccurrences).Maybe()
+		// api.On("KVGet", mock.AnythingOfType("string")).Return(stringOccurrences, nil)
+		// api.On("KVSet", mock.AnythingOfType("string"), stringOccurrences).Maybe()
 		return api
 	}
 
 	t.Run("if interactive schedule", func(t *testing.T) {
-
 		api := setupAPI()
 		defer api.AssertExpectations(t)
 
@@ -108,7 +105,5 @@ func TestInteractiveSchedule(t *testing.T) {
 		p.API = api
 
 		p.InteractiveSchedule(model.NewId(), user)
-
 	})
-
 }

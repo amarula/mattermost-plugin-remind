@@ -12,12 +12,10 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-func TestClearScheduledOccurrence(t *testing.T) {
-
+func TestClearScheduledOccurrence(_ *testing.T) {
 }
 
 func TestCreateOccurrences(t *testing.T) {
-
 	user := &model.User{
 		Email:    "-@-.-",
 		Nickname: "TestUser",
@@ -51,7 +49,7 @@ func TestCreateOccurrences(t *testing.T) {
 		},
 	}
 
-	//stringReminders, _ := json.Marshal(reminders)
+	// stringReminders, _ := json.Marshal(reminders)
 	stringOccurrences, _ := json.Marshal(occurrences)
 	setupAPI := func() *plugintest.API {
 		api := &plugintest.API{}
@@ -63,7 +61,6 @@ func TestCreateOccurrences(t *testing.T) {
 	}
 
 	t.Run("if creates occurrences", func(t *testing.T) {
-
 		api := setupAPI()
 		defer api.AssertExpectations(t)
 
@@ -73,11 +70,9 @@ func TestCreateOccurrences(t *testing.T) {
 		p.API = api
 
 		assert.Nil(t, p.CreateOccurrences(request))
-
 	})
 
 	t.Run("if fails to create occurrences", func(t *testing.T) {
-
 		api := setupAPI()
 		defer api.AssertExpectations(t)
 
@@ -93,7 +88,6 @@ func TestCreateOccurrences(t *testing.T) {
 }
 
 func TestIn(t *testing.T) {
-
 	setupAPI := func() *plugintest.API {
 		api := &plugintest.API{}
 		api.On("LogDebug", mock.Anything, mock.Anything, mock.Anything).Maybe()
@@ -102,7 +96,6 @@ func TestIn(t *testing.T) {
 	}
 
 	t.Run("if inEN locale is used", func(t *testing.T) {
-
 		api := setupAPI()
 		defer api.AssertExpectations(t)
 
@@ -180,9 +173,7 @@ func TestIn(t *testing.T) {
 		}
 		assert.Nil(t, err)
 		assert.Equal(t, times, testTimes)
-
 	})
-
 }
 
 func TestAt(t *testing.T) {
@@ -195,7 +186,6 @@ func TestAt(t *testing.T) {
 	}
 
 	t.Run("if atEN locale is used", func(t *testing.T) {
-
 		api := setupAPI()
 		defer api.AssertExpectations(t)
 
@@ -300,7 +290,6 @@ func TestOn(t *testing.T) {
 	}
 
 	t.Run("if onEN locale is used", func(t *testing.T) {
-
 		api := setupAPI()
 		defer api.AssertExpectations(t)
 
@@ -504,12 +493,10 @@ func TestOn(t *testing.T) {
 		assert.True(t, times[0].In(location).Year() == 2020 &&
 			times[0].In(location).Month() == 8 && times[0].In(location).Day() == 10 &&
 			times[0].In(location).Hour() == 13 && times[0].In(location).Minute() == 55)
-
 	})
 }
 
 func TestEvery(t *testing.T) {
-
 	setupAPI := func() *plugintest.API {
 		api := &plugintest.API{}
 		api.On("LogDebug", mock.Anything, mock.Anything, mock.Anything).Maybe()
@@ -623,7 +610,6 @@ func TestEvery(t *testing.T) {
 }
 
 func TestFreeForm(t *testing.T) {
-
 	setupAPI := func() *plugintest.API {
 		api := &plugintest.API{}
 		api.On("LogDebug", mock.Anything, mock.Anything, mock.Anything).Maybe()
@@ -761,12 +747,10 @@ func TestFreeForm(t *testing.T) {
 		if err == nil {
 			assert.Equal(t, times[0].In(location).Hour(), 17)
 		}
-
 	})
 }
 
 func TestFormatWhen(t *testing.T) {
-
 	user := &model.User{
 		Email:    "-@-.-",
 		Nickname: "TestUser",
@@ -786,7 +770,6 @@ func TestFormatWhen(t *testing.T) {
 	}
 
 	t.Run("if creates occurrences", func(t *testing.T) {
-
 		api := setupAPI()
 		defer api.AssertExpectations(t)
 
@@ -824,6 +807,5 @@ func TestFormatWhen(t *testing.T) {
 
 		when = p.formatWhen(user.Username, "tomorrow", timeTest, true)
 		assert.True(t, strings.Contains(when, "today"))
-
 	})
 }

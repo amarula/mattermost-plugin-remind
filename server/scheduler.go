@@ -8,8 +8,7 @@ import (
 	"github.com/mattermost/mattermost/server/public/model"
 )
 
-func (p *Plugin) ScheduleReminder(request *ReminderRequest, channelId string) (*model.Post, error) {
-
+func (p *Plugin) ScheduleReminder(request *ReminderRequest, channelID string) (*model.Post, error) {
 	user, uErr := p.API.GetUserByUsername(request.Username)
 	if uErr != nil {
 		p.API.LogError(uErr.Error())
@@ -67,8 +66,8 @@ func (p *Plugin) ScheduleReminder(request *ReminderRequest, channelId string) (*
 	}
 
 	return &model.Post{
-		ChannelId: channelId,
-		UserId:    p.botUserId,
+		ChannelId: channelID,
+		UserId:    p.botUserID,
 		Props: model.StringInterface{
 			"attachments": []*model.MessageAttachment{
 				{
@@ -105,15 +104,13 @@ func (p *Plugin) ScheduleReminder(request *ReminderRequest, channelId string) (*
 			},
 		},
 	}, nil
-
 }
 
-func (p *Plugin) InteractiveSchedule(triggerId string, user *model.User) {
-
+func (p *Plugin) InteractiveSchedule(triggerID string, user *model.User) {
 	T, _ := p.translation(user)
 
 	dialogRequest := model.OpenDialogRequest{
-		TriggerId: triggerId,
+		TriggerId: triggerID,
 		URL:       fmt.Sprintf("/plugins/%s/dialog", PluginID),
 		Dialog: model.Dialog{
 			Title:       T("schedule.reminder"),

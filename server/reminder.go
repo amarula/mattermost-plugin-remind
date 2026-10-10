@@ -74,13 +74,12 @@ func (p *Plugin) TriggerRemindersForTick(tickAt time.Time) {
 	p.API.LogDebug("Trigger reminders for " + fmt.Sprintf("%v", tickAt))
 
 	// Look up reminders to be triggered for the tick time
-	bytes, err := p.API.KVGet(string(fmt.Sprintf("%v", tickAt)))
+	bytes, err := p.API.KVGet(fmt.Sprintf("%v", tickAt))
 	if err != nil {
 		p.API.LogError("failed KVGet %s", err)
 	}
 
-	if string(bytes[:]) != "" {
-
+	if string(bytes) != "" {
 		var occurrences []Occurrence
 		oErr := json.Unmarshal(bytes, &occurrences)
 		if oErr != nil {
@@ -90,7 +89,6 @@ func (p *Plugin) TriggerRemindersForTick(tickAt time.Time) {
 		hostname, _ := os.Hostname()
 
 		for _, occurrence := range occurrences {
-
 			if hostname != occurrence.Hostname {
 				continue
 			}
@@ -121,8 +119,8 @@ func (p *Plugin) TriggerRemindersForTick(tickAt time.Time) {
 				continue
 			}
 
-			if strings.HasPrefix(reminder.Target, "@") || strings.HasPrefix(reminder.Target, T("me")) { //@user
-				var targetId string
+			if strings.HasPrefix(reminder.Target, "@") || strings.HasPrefix(reminder.Target, T("me")) { // @user
+				var targetID string
 				if strings.HasPrefix(reminder.Target, "@") {
 					target := strings.Trim(reminder.Target, "@")
 					targetUser, tErr := p.API.GetUserByUsername(target)
@@ -130,12 +128,12 @@ func (p *Plugin) TriggerRemindersForTick(tickAt time.Time) {
 						p.API.LogError("failed to find target user " + reminder.Target)
 						continue
 					}
-					targetId = targetUser.Id
+					targetID = targetUser.Id
 				} else {
-					targetId = user.Id
+					targetID = user.Id
 				}
 
-				channel, cErr := p.API.GetDirectChannel(p.botUserId, targetId)
+				channel, cErr := p.API.GetDirectChannel(p.botUserID, targetID)
 				if cErr != nil {
 					p.API.LogError("failed to create channel " + cErr.Error())
 					continue
@@ -156,11 +154,10 @@ func (p *Plugin) TriggerRemindersForTick(tickAt time.Time) {
 				interactivePost := model.Post{}
 
 				if occurrence.Repeat == "" {
-
 					interactivePost = model.Post{
 						ChannelId:     channel.Id,
 						PendingPostId: model.NewId() + ":" + fmt.Sprint(model.GetMillis()),
-						UserId:        p.botUserId,
+						UserId:        p.botUserID,
 						Props: model.StringInterface{
 							"attachments": []*model.MessageAttachment{
 								{
@@ -233,13 +230,11 @@ func (p *Plugin) TriggerRemindersForTick(tickAt time.Time) {
 							},
 						},
 					}
-
 				} else {
-
 					interactivePost = model.Post{
 						ChannelId:     channel.Id,
 						PendingPostId: model.NewId() + ":" + fmt.Sprint(model.GetMillis()),
-						UserId:        p.botUserId,
+						UserId:        p.botUserID,
 						Props: model.StringInterface{
 							"attachments": []*model.MessageAttachment{
 								{
@@ -294,19 +289,16 @@ func (p *Plugin) TriggerRemindersForTick(tickAt time.Time) {
 				if occurrence.Repeat != "" {
 					defer p.rescheduleOccurrence(&occurrence)
 				}
-
-			} else if strings.HasPrefix(reminder.Target, "~") { //~ channel
-
+			} else if strings.HasPrefix(reminder.Target, "~") { // ~ channel
 				channel, cErr := p.API.GetChannelByName(
 					reminder.TeamId,
-					strings.Replace(reminder.Target, "~", "", -1),
+					strings.ReplaceAll(reminder.Target, "~", ""),
 					false,
 				)
 
 				if cErr != nil {
 					p.API.LogError("fail to get channel " + fmt.Sprintf("%v", cErr))
 				} else {
-
 					var messageParameters = map[string]interface{}{
 						"FinalTarget": "@" + user.Username,
 						"Message":     reminder.Message,
@@ -315,7 +307,7 @@ func (p *Plugin) TriggerRemindersForTick(tickAt time.Time) {
 					interactivePost := model.Post{
 						ChannelId:     channel.Id,
 						PendingPostId: model.NewId() + ":" + fmt.Sprint(model.GetMillis()),
-						UserId:        p.botUserId,
+						UserId:        p.botUserID,
 						Type:          model.PostCustomTypePrefix + "reminder",
 						Message:       T("reminder.message", messageParameters),
 						Props:         model.StringInterface{},
@@ -328,26 +320,21 @@ func (p *Plugin) TriggerRemindersForTick(tickAt time.Time) {
 					if occurrence.Repeat != "" {
 						defer p.rescheduleOccurrence(&occurrence)
 					}
-
 				}
 			}
-
 		}
-
 	}
-
 }
 
-func (p *Plugin) GetReminder(userId string, reminderId string) Reminder {
-
-	user, uErr := p.API.GetUser(userId)
+func (p *Plugin) GetReminder(userID string, reminderID string) Reminder {
+	user, uErr := p.API.GetUser(userID)
 	if uErr != nil {
 		return Reminder{}
 	}
 
 	reminders := p.GetReminders(user.Username)
 	for _, reminder := range reminders {
-		if reminder.Id == reminderId {
+		if reminder.Id == reminderID {
 			return reminder
 		}
 	}
@@ -356,7 +343,6 @@ func (p *Plugin) GetReminder(userId string, reminderId string) Reminder {
 }
 
 func (p *Plugin) GetReminders(username string) []Reminder {
-
 	user, uErr := p.API.GetUserByUsername(username)
 
 	if uErr != nil {
@@ -379,9 +365,8 @@ func (p *Plugin) GetReminders(username string) []Reminder {
 	return reminders
 }
 
-func (p *Plugin) UpdateReminder(userId string, reminder Reminder) error {
-
-	user, uErr := p.API.GetUser(userId)
+func (p *Plugin) UpdateReminder(userID string, reminder Reminder) error {
+	user, uErr := p.API.GetUser(userID)
 
 	if uErr != nil {
 		p.API.LogError("failed to query user %s", user.Username)
@@ -423,7 +408,6 @@ func (p *Plugin) UpdateReminder(userId string, reminder Reminder) error {
 }
 
 func (p *Plugin) UpsertReminder(request *ReminderRequest) error {
-
 	user, uErr := p.API.GetUserByUsername(request.Username)
 
 	if uErr != nil {
@@ -445,7 +429,7 @@ func (p *Plugin) UpsertReminder(request *ReminderRequest) error {
 
 	duplicateReminder := false
 	// a feature requested by PM.   seems to create undesired results
-	//for _, r := range reminders {
+	// for _, r := range reminders {
 	//	r.Id = request.Reminder.Id
 	//	if r.Username == request.Reminder.Username &&
 	//		r.Target == request.Reminder.Target &&
@@ -471,9 +455,8 @@ func (p *Plugin) UpsertReminder(request *ReminderRequest) error {
 	return nil
 }
 
-func (p *Plugin) DeleteReminder(userId string, reminder Reminder) error {
-
-	user, uErr := p.API.GetUser(userId)
+func (p *Plugin) DeleteReminder(userID string, reminder Reminder) error {
+	user, uErr := p.API.GetUser(userID)
 
 	if uErr != nil {
 		p.API.LogError("failed to query user %s", user.Username)
@@ -546,7 +529,6 @@ func (p *Plugin) DeleteReminders(user *model.User) string {
 }
 
 func (p *Plugin) rescheduleOccurrence(occurrence *Occurrence) {
-
 	time.Sleep(1000 * time.Millisecond)
 
 	user, uErr := p.API.GetUserByUsername(occurrence.Username)
@@ -610,11 +592,9 @@ func (p *Plugin) rescheduleOccurrence(occurrence *Occurrence) {
 	if upErr != nil {
 		p.API.LogError("failed to update reminder %s", upErr)
 	}
-
 }
 
 func (p *Plugin) rescheduleOccurrenceEN(occurrence *Occurrence) ([]time.Time, error) {
-
 	user, uErr := p.API.GetUserByUsername(occurrence.Username)
 	if uErr != nil {
 		return nil, uErr
@@ -654,7 +634,7 @@ func (p *Plugin) getLastTickTimeWithDefault(defaultValue time.Time) time.Time {
 		return defaultValue
 	}
 
-	lastTickAt, parseErr := time.Parse(time.RFC3339, string(bytes[:]))
+	lastTickAt, parseErr := time.Parse(time.RFC3339, string(bytes))
 	if parseErr != nil {
 		p.API.LogInfo(fmt.Sprintf("Failed to parse LastTickAt value (%v); returning the default value", parseErr))
 		return defaultValue

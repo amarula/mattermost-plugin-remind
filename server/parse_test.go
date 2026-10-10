@@ -10,7 +10,6 @@ import (
 )
 
 func TestParseRequest(t *testing.T) {
-
 	user := &model.User{
 		Email:    "-@-.-",
 		Nickname: "TestUser",
@@ -131,7 +130,6 @@ func TestParseRequest(t *testing.T) {
 }
 
 func TestFindWhen(t *testing.T) {
-
 	user := &model.User{
 		Email:    "-@-.-",
 		Nickname: "TestUser",
@@ -151,7 +149,6 @@ func TestFindWhen(t *testing.T) {
 	}
 
 	t.Run("if findWhen", func(t *testing.T) {
-
 		api := setupAPI()
 		defer api.AssertExpectations(t)
 
@@ -356,5 +353,4 @@ func TestFindWhen(t *testing.T) {
 		err = p.findWhen(request)
 		assert.True(t, err == nil)
 	})
-
 }

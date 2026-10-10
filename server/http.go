@@ -39,7 +39,7 @@ func (p *Plugin) InitAPI() *mux.Router {
 	return r
 }
 
-func (p *Plugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r *http.Request) {
+func (p *Plugin) ServeHTTP(_ *plugin.Context, w http.ResponseWriter, r *http.Request) {
 	// These endpoints are reachable by any signed-in user, and the handlers read
 	// their input with unchecked type assertions on the request body. A panic
 	// there used to kill the plugin process, taking every other user's reminders
@@ -54,10 +54,9 @@ func (p *Plugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r *http.Req
 	p.router.ServeHTTP(w, r)
 }
 
-func (p *Plugin) handleDialog(w http.ResponseWriter, req *http.Request) {
-
+func (p *Plugin) handleDialog(_ http.ResponseWriter, req *http.Request) {
 	body, _ := io.ReadAll(req.Body)
-	defer req.Body.Close()
+	defer func() { _ = req.Body.Close() }()
 
 	var request *model.SubmitDialogRequest
 	_ = json.Unmarshal(body, &request)
@@ -152,7 +151,7 @@ func (p *Plugin) handleDialog(w http.ResponseWriter, req *http.Request) {
 
 	reminder := &model.Post{
 		ChannelId: request.ChannelId,
-		UserId:    p.botUserId,
+		UserId:    p.botUserID,
 		Props: model.StringInterface{
 			"attachments": []*model.MessageAttachment{
 				{
@@ -188,13 +187,11 @@ func (p *Plugin) handleDialog(w http.ResponseWriter, req *http.Request) {
 		},
 	}
 	p.API.SendEphemeralPost(user.Id, reminder)
-
 }
 
 func (p *Plugin) handleViewEphemeral(w http.ResponseWriter, r *http.Request) {
-
 	body, _ := io.ReadAll(r.Body)
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }()
 
 	var request *model.PostActionIntegrationRequest
 	_ = json.Unmarshal(body, &request)
@@ -208,13 +205,11 @@ func (p *Plugin) handleViewEphemeral(w http.ResponseWriter, r *http.Request) {
 	p.API.SendEphemeralPost(user.Id, p.ListReminders(user, request.ChannelId))
 
 	writePostActionIntegrationResponseOk(w, &model.PostActionIntegrationResponse{})
-
 }
 
 func (p *Plugin) handleComplete(w http.ResponseWriter, r *http.Request) {
-
 	body, _ := io.ReadAll(r.Body)
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }()
 
 	var request *model.PostActionIntegrationRequest
 	_ = json.Unmarshal(body, &request)
@@ -242,7 +237,6 @@ func (p *Plugin) handleComplete(w http.ResponseWriter, r *http.Request) {
 		p.API.LogError("unable to get post " + pErr.Error())
 		writePostActionIntegrationResponseError(w, &model.PostActionIntegrationResponse{})
 	} else {
-
 		user, uError := p.API.GetUser(request.UserId)
 		if uError != nil {
 			p.API.LogError(uError.Error())
@@ -277,7 +271,7 @@ func (p *Plugin) handleComplete(w http.ResponseWriter, r *http.Request) {
 				writePostActionIntegrationResponseError(w, &model.PostActionIntegrationResponse{})
 				return
 			} else {
-				if channel, cErr := p.API.GetDirectChannel(p.botUserId, originalUser.Id); cErr != nil {
+				if channel, cErr := p.API.GetDirectChannel(p.botUserID, originalUser.Id); cErr != nil {
 					p.API.LogError("failed to create channel " + cErr.Error())
 					writePostActionIntegrationResponseError(w, &model.PostActionIntegrationResponse{})
 				} else {
@@ -287,7 +281,7 @@ func (p *Plugin) handleComplete(w http.ResponseWriter, r *http.Request) {
 					}
 					if _, pErr := p.API.CreatePost(&model.Post{
 						ChannelId: channel.Id,
-						UserId:    p.botUserId,
+						UserId:    p.botUserID,
 						Message:   T("action.complete.callback", postbackUpdateParameters),
 					}); pErr != nil {
 						p.API.LogError(pErr.Error())
@@ -299,13 +293,11 @@ func (p *Plugin) handleComplete(w http.ResponseWriter, r *http.Request) {
 
 		writePostActionIntegrationResponseOk(w, &model.PostActionIntegrationResponse{})
 	}
-
 }
 
 func (p *Plugin) handleDelete(w http.ResponseWriter, r *http.Request) {
-
 	body, _ := io.ReadAll(r.Body)
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }()
 
 	var request *model.PostActionIntegrationRequest
 	_ = json.Unmarshal(body, &request)
@@ -344,13 +336,11 @@ func (p *Plugin) handleDelete(w http.ResponseWriter, r *http.Request) {
 		}
 		writePostActionIntegrationResponseOk(w, &model.PostActionIntegrationResponse{})
 	}
-
 }
 
 func (p *Plugin) handleDeleteEphemeral(w http.ResponseWriter, r *http.Request) {
-
 	body, _ := io.ReadAll(r.Body)
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }()
 
 	var request *model.PostActionIntegrationRequest
 	_ = json.Unmarshal(body, &request)
@@ -378,19 +368,17 @@ func (p *Plugin) handleDeleteEphemeral(w http.ResponseWriter, r *http.Request) {
 	}
 	post := &model.Post{
 		Id:        request.PostId,
-		UserId:    p.botUserId,
+		UserId:    p.botUserID,
 		ChannelId: request.ChannelId,
 		Message:   T("action.delete", deleteParameters),
 	}
 	p.API.UpdateEphemeralPost(request.UserId, post)
 	writePostActionIntegrationResponseOk(w, &model.PostActionIntegrationResponse{})
-
 }
 
 func (p *Plugin) handleSnooze(w http.ResponseWriter, r *http.Request) {
-
 	body, _ := io.ReadAll(r.Body)
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }()
 
 	var request *model.PostActionIntegrationRequest
 	_ = json.Unmarshal(body, &request)
@@ -464,7 +452,6 @@ func (p *Plugin) handleSnooze(w http.ResponseWriter, r *http.Request) {
 		case "tomorrow":
 			for i, occurrence := range reminder.Occurrences {
 				if occurrence.Id == request.Context["occurrence_id"].(string) {
-
 					if user, uErr := p.API.GetUser(request.UserId); uErr != nil {
 						p.API.LogError(uErr.Error())
 						return
@@ -486,7 +473,6 @@ func (p *Plugin) handleSnooze(w http.ResponseWriter, r *http.Request) {
 		case "nextweek":
 			for i, occurrence := range reminder.Occurrences {
 				if occurrence.Id == request.Context["occurrence_id"].(string) {
-
 					if user, uErr := p.API.GetUser(request.UserId); uErr != nil {
 						p.API.LogError(uErr.Error())
 						return
@@ -529,7 +515,7 @@ func (p *Plugin) handleSnooze(w http.ResponseWriter, r *http.Request) {
 
 func (p *Plugin) handleNextReminders(w http.ResponseWriter, r *http.Request) {
 	body, _ := io.ReadAll(r.Body)
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }()
 
 	var request *model.PostActionIntegrationRequest
 	_ = json.Unmarshal(body, &request)
@@ -539,7 +525,7 @@ func (p *Plugin) handleNextReminders(w http.ResponseWriter, r *http.Request) {
 
 func (p *Plugin) handleCompleteList(w http.ResponseWriter, r *http.Request) {
 	body, _ := io.ReadAll(r.Body)
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }()
 
 	var request *model.PostActionIntegrationRequest
 	_ = json.Unmarshal(body, &request)
@@ -560,7 +546,7 @@ func (p *Plugin) handleCompleteList(w http.ResponseWriter, r *http.Request) {
 
 func (p *Plugin) handleViewCompleteList(w http.ResponseWriter, r *http.Request) {
 	body, _ := io.ReadAll(r.Body)
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }()
 
 	var request *model.PostActionIntegrationRequest
 	_ = json.Unmarshal(body, &request)
@@ -570,7 +556,7 @@ func (p *Plugin) handleViewCompleteList(w http.ResponseWriter, r *http.Request) 
 
 func (p *Plugin) handleDeleteList(w http.ResponseWriter, r *http.Request) {
 	body, _ := io.ReadAll(r.Body)
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }()
 
 	var request *model.PostActionIntegrationRequest
 	_ = json.Unmarshal(body, &request)
@@ -590,7 +576,7 @@ func (p *Plugin) handleDeleteList(w http.ResponseWriter, r *http.Request) {
 
 func (p *Plugin) handleDeleteCompleteList(w http.ResponseWriter, r *http.Request) {
 	body, _ := io.ReadAll(r.Body)
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }()
 
 	var request *model.PostActionIntegrationRequest
 	_ = json.Unmarshal(body, &request)
@@ -601,7 +587,7 @@ func (p *Plugin) handleDeleteCompleteList(w http.ResponseWriter, r *http.Request
 
 func (p *Plugin) handleSnoozeList(w http.ResponseWriter, r *http.Request) {
 	body, _ := io.ReadAll(r.Body)
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }()
 
 	var request *model.PostActionIntegrationRequest
 	_ = json.Unmarshal(body, &request)
@@ -656,7 +642,6 @@ func (p *Plugin) handleSnoozeList(w http.ResponseWriter, r *http.Request) {
 	case "tomorrow":
 		for i, occurrence := range reminder.Occurrences {
 			if occurrence.Id == request.Context["occurrence_id"].(string) {
-
 				if user, uErr := p.API.GetUser(request.UserId); uErr != nil {
 					p.API.LogError(uErr.Error())
 					return
@@ -677,7 +662,6 @@ func (p *Plugin) handleSnoozeList(w http.ResponseWriter, r *http.Request) {
 	case "nextweek":
 		for i, occurrence := range reminder.Occurrences {
 			if occurrence.Id == request.Context["occurrence_id"].(string) {
-
 				if user, uErr := p.API.GetUser(request.UserId); uErr != nil {
 					p.API.LogError(uErr.Error())
 					return
@@ -714,7 +698,7 @@ func (p *Plugin) handleSnoozeList(w http.ResponseWriter, r *http.Request) {
 
 func (p *Plugin) handleCloseList(w http.ResponseWriter, r *http.Request) {
 	body, _ := io.ReadAll(r.Body)
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }()
 
 	var request *model.PostActionIntegrationRequest
 	_ = json.Unmarshal(body, &request)

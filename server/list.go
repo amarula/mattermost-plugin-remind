@@ -10,23 +10,22 @@ import (
 
 const RemindersPerPage = 4
 
-func (p *Plugin) ListReminders(user *model.User, channelId string) *model.Post {
-
+func (p *Plugin) ListReminders(user *model.User, channelID string) *model.Post {
 	T, _ := p.translation(user)
 	offset := 0
 	reminders := p.GetReminders(user.Username)
 	if len(reminders) == 0 {
 		return &model.Post{
-			ChannelId:     channelId,
+			ChannelId:     channelID,
 			PendingPostId: model.NewId() + ":" + fmt.Sprint(model.GetMillis()),
-			UserId:        p.botUserId,
+			UserId:        p.botUserID,
 			Message:       T("no.reminders"),
 		}
 	}
 	completedReminderCount := 0
 	for _, reminder := range reminders {
 		if reminder.Completed != p.emptyTime {
-			completedReminderCount += 1
+			completedReminderCount++
 		}
 	}
 	endOffset := offset + RemindersPerPage - 1
@@ -59,19 +58,17 @@ func (p *Plugin) ListReminders(user *model.User, channelId string) *model.Post {
 		attachments)
 
 	return &model.Post{
-		ChannelId:     channelId,
+		ChannelId:     channelID,
 		PendingPostId: model.NewId() + ":" + fmt.Sprint(model.GetMillis()),
-		UserId:        p.botUserId,
+		UserId:        p.botUserID,
 		Props: model.StringInterface{
 			"attachments": attachments,
 		},
 	}
-
 }
 
-func (p *Plugin) UpdateListReminders(userId string, postId string, channelId string, offset int) {
-
-	user, uErr := p.API.GetUser(userId)
+func (p *Plugin) UpdateListReminders(userID string, postID string, channelID string, offset int) {
+	user, uErr := p.API.GetUser(userID)
 	if uErr != nil {
 		p.API.LogError(uErr.Error())
 	}
@@ -80,7 +77,7 @@ func (p *Plugin) UpdateListReminders(userId string, postId string, channelId str
 	completedReminderCount := 0
 	for _, reminder := range reminders {
 		if reminder.Completed != p.emptyTime {
-			completedReminderCount += 1
+			completedReminderCount++
 		}
 	}
 	activeReminderCount := len(reminders) - completedReminderCount
@@ -118,15 +115,14 @@ func (p *Plugin) UpdateListReminders(userId string, postId string, channelId str
 		attachments)
 
 	post := &model.Post{
-		Id:        postId,
-		ChannelId: channelId,
-		UserId:    p.botUserId,
+		Id:        postID,
+		ChannelId: channelID,
+		UserId:    p.botUserID,
 		Props: model.StringInterface{
 			"attachments": attachments,
 		},
 	}
-	p.API.UpdateEphemeralPost(userId, post)
-
+	p.API.UpdateEphemeralPost(userID, post)
 }
 
 func (p *Plugin) categorizeOccurrences(reminders []Reminder) (
@@ -134,9 +130,7 @@ func (p *Plugin) categorizeOccurrences(reminders []Reminder) (
 	recurringOccurrences []Occurrence,
 	pastOccurrences []Occurrence,
 	channelOccurrences []Occurrence) {
-
 	for _, reminder := range reminders {
-
 		occurrences := reminder.Occurrences
 
 		if len(occurrences) > 0 {
@@ -159,7 +153,7 @@ func (p *Plugin) categorizeOccurrences(reminders []Reminder) (
 				recurringOccurrences = append(recurringOccurrences, occurrence)
 			} else if !isCompleted &&
 				isPast &&
-				(s == p.emptyTime || s.Before(time.Now().UTC())) {
+				(s.Equal(p.emptyTime) || s.Before(time.Now().UTC())) {
 				pastOccurrences = append(pastOccurrences, occurrence)
 			} else if isChannelReminder &&
 				!isCompleted &&
@@ -174,7 +168,6 @@ func (p *Plugin) categorizeOccurrences(reminders []Reminder) (
 	}
 
 	return upcomingOccurrences, recurringOccurrences, pastOccurrences, channelOccurrences
-
 }
 
 func (p *Plugin) pagedOccurrences(
@@ -186,7 +179,6 @@ func (p *Plugin) pagedOccurrences(
 	channelOccurrences []Occurrence,
 	offset int,
 	endOffset int) (attachments []*model.MessageAttachment) {
-
 	offsetCount := 0
 
 	if len(upcomingOccurrences) > 0 {
@@ -194,7 +186,7 @@ func (p *Plugin) pagedOccurrences(
 			if offsetCount >= offset && offsetCount <= endOffset {
 				attachments = append(attachments, p.addAttachment(user, o, reminders, "upcoming", offset))
 			}
-			offsetCount += 1
+			offsetCount++
 		}
 	}
 
@@ -203,7 +195,7 @@ func (p *Plugin) pagedOccurrences(
 			if offsetCount >= offset && offsetCount <= endOffset {
 				attachments = append(attachments, p.addAttachment(user, o, reminders, "recurring", offset))
 			}
-			offsetCount += 1
+			offsetCount++
 		}
 	}
 
@@ -212,7 +204,7 @@ func (p *Plugin) pagedOccurrences(
 			if offsetCount >= offset && offsetCount <= endOffset {
 				attachments = append(attachments, p.addAttachment(user, o, reminders, "past", offset))
 			}
-			offsetCount += 1
+			offsetCount++
 		}
 	}
 	if len(channelOccurrences) > 0 {
@@ -220,12 +212,11 @@ func (p *Plugin) pagedOccurrences(
 			if offsetCount >= offset && offsetCount <= endOffset {
 				attachments = append(attachments, p.addAttachment(user, o, reminders, "channel", offset))
 			}
-			offsetCount += 1
+			offsetCount++
 		}
 	}
 
 	return attachments
-
 }
 
 func (p *Plugin) listControl(
@@ -235,7 +226,6 @@ func (p *Plugin) listControl(
 	offset int,
 	endOffset int,
 	attachments []*model.MessageAttachment) []*model.MessageAttachment {
-
 	T, _ := p.translation(user)
 
 	reminderCount := map[string]interface{}{
@@ -257,9 +247,7 @@ func (p *Plugin) listControl(
 	actions := []*model.PostAction{}
 
 	if activeReminderCount > RemindersPerPage {
-
 		if offset == 0 {
-
 			actions = append(actions,
 				&model.PostAction{
 					Integration: &model.PostActionIntegration{
@@ -272,9 +260,7 @@ func (p *Plugin) listControl(
 					Type: model.PostActionTypeButton,
 					Name: T("button.next.reminders", reminderCount),
 				})
-
 		} else if offset >= activeReminderCount-RemindersPerPage {
-
 			actions = append(actions,
 				&model.PostAction{
 					Integration: &model.PostActionIntegration{
@@ -287,9 +273,7 @@ func (p *Plugin) listControl(
 					Type: model.PostActionTypeButton,
 					Name: T("button.previous.reminders", reminderCount),
 				})
-
 		} else {
-
 			actions = append(actions,
 				&model.PostAction{
 					Integration: &model.PostActionIntegration{
@@ -314,13 +298,10 @@ func (p *Plugin) listControl(
 					Type: model.PostActionTypeButton,
 					Name: T("button.next.reminders", reminderCount),
 				})
-
 		}
-
 	}
 
 	if completedReminderCount > 0 {
-
 		actions = append(actions,
 			&model.PostAction{
 				Integration: &model.PostActionIntegration{
@@ -345,7 +326,6 @@ func (p *Plugin) listControl(
 				Type: model.PostActionTypeButton,
 				Name: T("button.delete.complete"),
 			})
-
 	}
 
 	actions = append(actions,
@@ -367,7 +347,6 @@ func (p *Plugin) listControl(
 }
 
 func (p *Plugin) addAttachment(user *model.User, occurrence Occurrence, reminders []Reminder, gType string, offset int) *model.MessageAttachment {
-
 	location := p.location(user)
 	T, _ := p.translation(user)
 
@@ -571,9 +550,8 @@ func (p *Plugin) addAttachment(user *model.User, occurrence Occurrence, reminder
 	return &model.MessageAttachment{}
 }
 
-func (p *Plugin) ListCompletedReminders(userId string, postId string, channelId string) {
-
-	user, uErr := p.API.GetUser(userId)
+func (p *Plugin) ListCompletedReminders(userID string, postID string, channelID string) {
+	user, uErr := p.API.GetUser(userID)
 	if uErr != nil {
 		p.API.LogError(uErr.Error())
 	}
@@ -589,28 +567,26 @@ func (p *Plugin) ListCompletedReminders(userId string, postId string, channelId 
 	}
 
 	post := &model.Post{
-		Id:        postId,
-		ChannelId: channelId,
+		Id:        postID,
+		ChannelId: channelID,
 		Message:   output,
 		Props:     model.StringInterface{},
 	}
-	p.API.UpdateEphemeralPost(userId, post)
+	p.API.UpdateEphemeralPost(userID, post)
 }
 
-func (p *Plugin) DeleteCompletedReminders(userId string) {
-
-	user, uErr := p.API.GetUser(userId)
+func (p *Plugin) DeleteCompletedReminders(userID string) {
+	user, uErr := p.API.GetUser(userID)
 	if uErr != nil {
 		p.API.LogError(uErr.Error())
 	}
 	reminders := p.GetReminders(user.Username)
 	for _, reminder := range reminders {
 		if reminder.Completed != p.emptyTime {
-			dErr := p.DeleteReminder(userId, reminder)
+			dErr := p.DeleteReminder(userID, reminder)
 			if dErr != nil {
 				p.API.LogError("failed to update post %s", dErr)
 			}
 		}
 	}
-
 }

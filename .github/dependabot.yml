@@ -1,0 +1,9 @@
+version: 2
+updates:
+  # Server dependencies. Kept ungrouped so that a Mattermost plugin API bump
+  # arrives as its own reviewable pull request.
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5

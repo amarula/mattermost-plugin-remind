@@ -8,9 +8,7 @@ import (
 )
 
 func TestTranslation(t *testing.T) {
-
 	t.Run("if can translate with locale", func(t *testing.T) {
-
 		p := &Plugin{}
 
 		user := &model.User{
@@ -31,9 +29,7 @@ func TestTranslation(t *testing.T) {
 }
 
 func TestLocation(t *testing.T) {
-
 	t.Run("if can locate", func(t *testing.T) {
-
 		p := &Plugin{}
 		timezone := make(map[string]string)
 		timezone["manualTimezone"] = "America/Los_Angeles"
@@ -49,6 +45,5 @@ func TestLocation(t *testing.T) {
 
 		location := p.location(user)
 		assert.NotNil(t, location)
-
 	})
 }

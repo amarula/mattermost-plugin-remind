@@ -26,7 +26,7 @@ func TestTriggerReminders(t *testing.T) {
 		api.On("KVGet", string("LastTickAt")).Return(serializedLastTickAt, nil)
 		api.On("KVSet", string("LastTickAt"), serializedTestTime).Return(nil)
 		api.On("LogDebug", "Trigger reminders for "+fmt.Sprintf("%v", testTime))
-		api.On("KVGet", string(fmt.Sprintf("%v", testTime))).Return(nil, nil)
+		api.On("KVGet", fmt.Sprintf("%v", testTime)).Return(nil, nil)
 		defer api.AssertExpectations(t)
 
 		p := &Plugin{}
@@ -47,12 +47,12 @@ func TestTriggerReminders(t *testing.T) {
 		api.On("KVSet", string("LastTickAt"), serializedTestTime).Return(nil)
 		api.On("LogDebug", "Catching up on 2 reminder tick(s)...")
 		api.On("LogDebug", "Trigger reminders for "+fmt.Sprintf("%v", testTime.Add(twoSecondsAgo)))
-		api.On("KVGet", string(fmt.Sprintf("%v", testTime.Add(twoSecondsAgo)))).Return(nil, nil)
+		api.On("KVGet", fmt.Sprintf("%v", testTime.Add(twoSecondsAgo))).Return(nil, nil)
 		api.On("LogDebug", "Trigger reminders for "+fmt.Sprintf("%v", testTime.Add(oneSecondsAgo)))
-		api.On("KVGet", string(fmt.Sprintf("%v", testTime.Add(oneSecondsAgo)))).Return(nil, nil)
+		api.On("KVGet", fmt.Sprintf("%v", testTime.Add(oneSecondsAgo))).Return(nil, nil)
 		api.On("LogDebug", "Caught up on missed reminder ticks.")
 		api.On("LogDebug", "Trigger reminders for "+fmt.Sprintf("%v", testTime))
-		api.On("KVGet", string(fmt.Sprintf("%v", testTime))).Return(nil, nil)
+		api.On("KVGet", fmt.Sprintf("%v", testTime)).Return(nil, nil)
 		defer api.AssertExpectations(t)
 
 		p := &Plugin{}
@@ -63,7 +63,6 @@ func TestTriggerReminders(t *testing.T) {
 }
 
 func TestTriggerRemindersForTick(t *testing.T) {
-
 	user := &model.User{
 		Email:    "-@-.-",
 		Nickname: "TestUser",
@@ -83,20 +82,20 @@ func TestTriggerRemindersForTick(t *testing.T) {
 
 	testTime := time.Now().UTC().Round(time.Second)
 	hostname, _ := os.Hostname()
-	reminderId := model.NewId()
+	reminderID := model.NewId()
 
 	occurrences := []Occurrence{
 		{
 			Hostname:   hostname,
 			Id:         model.NewId(),
-			ReminderId: reminderId,
+			ReminderId: reminderID,
 			Occurrence: testTime,
 		},
 	}
 
 	reminders := []Reminder{
 		{
-			Id:          reminderId,
+			Id:          reminderID,
 			TeamId:      model.NewId(),
 			Username:    user.Username,
 			Message:     "Hello",
@@ -113,7 +112,7 @@ func TestTriggerRemindersForTick(t *testing.T) {
 		api.On("LogDebug", mock.Anything, mock.Anything, mock.Anything).Maybe()
 		api.On("LogError", mock.Anything, mock.Anything, mock.Anything).Maybe()
 		api.On("LogInfo", mock.Anything).Maybe()
-		api.On("KVGet", string(fmt.Sprintf("%v", testTime))).Return(stringOccurrences, nil)
+		api.On("KVGet", fmt.Sprintf("%v", testTime)).Return(stringOccurrences, nil)
 		api.On("GetUserByUsername", mock.AnythingOfType("string")).Return(user, nil)
 		api.On("CreatePost", mock.Anything).Return(post, nil)
 		return api
@@ -124,7 +123,7 @@ func TestTriggerRemindersForTick(t *testing.T) {
 			{
 				Hostname:   model.NewId(),
 				Id:         model.NewId(),
-				ReminderId: reminderId,
+				ReminderId: reminderID,
 				Occurrence: testTime,
 			},
 		}
@@ -132,14 +131,13 @@ func TestTriggerRemindersForTick(t *testing.T) {
 		stringOccurrences, _ := json.Marshal(occurrences)
 		api := &plugintest.API{}
 		api.On("LogDebug", mock.Anything, mock.Anything, mock.Anything).Maybe()
-		api.On("KVGet", string(fmt.Sprintf("%v", testTime))).Return(stringOccurrences, nil)
+		api.On("KVGet", fmt.Sprintf("%v", testTime)).Return(stringOccurrences, nil)
 		defer api.AssertExpectations(t)
 
 		p := &Plugin{}
 		p.API = api
 
 		p.TriggerRemindersForTick(testTime)
-
 	})
 
 	t.Run("if triggers reminder for me", func(t *testing.T) {
@@ -153,7 +151,6 @@ func TestTriggerRemindersForTick(t *testing.T) {
 		p.API = api
 
 		p.TriggerRemindersForTick(testTime)
-
 	})
 
 	t.Run("if triggers reminder for user", func(t *testing.T) {
@@ -168,7 +165,6 @@ func TestTriggerRemindersForTick(t *testing.T) {
 		p.API = api
 
 		p.TriggerRemindersForTick(testTime)
-
 	})
 
 	t.Run("if triggers reminder for channel", func(t *testing.T) {
@@ -183,7 +179,6 @@ func TestTriggerRemindersForTick(t *testing.T) {
 		p.API = api
 
 		p.TriggerRemindersForTick(testTime)
-
 	})
 
 	t.Run("if triggers user reminder recurring", func(t *testing.T) {
@@ -191,14 +186,14 @@ func TestTriggerRemindersForTick(t *testing.T) {
 			{
 				Hostname:   hostname,
 				Id:         model.NewId(),
-				ReminderId: reminderId,
+				ReminderId: reminderID,
 				Occurrence: testTime,
 				Repeat:     "every tuesday at 3pm",
 			},
 		}
 		reminders := []Reminder{
 			{
-				Id:          reminderId,
+				Id:          reminderID,
 				TeamId:      model.NewId(),
 				Username:    user.Username,
 				Message:     "Hello",
@@ -218,7 +213,7 @@ func TestTriggerRemindersForTick(t *testing.T) {
 		api.On("CreatePost", mock.Anything).Return(post, nil)
 		api.On("GetDirectChannel", mock.Anything, mock.Anything).Return(channel, nil)
 
-		api.On("KVGet", string(fmt.Sprintf("%v", testTime))).Return(stringOccurrences, nil)
+		api.On("KVGet", fmt.Sprintf("%v", testTime)).Return(stringOccurrences, nil)
 		api.On("KVGet", user.Username).Return(stringReminders, nil)
 		api.On("KVGet", mock.Anything).Return(stringOccurrences, nil)
 		api.On("KVSet", mock.Anything, mock.Anything).Return(nil)
@@ -229,7 +224,6 @@ func TestTriggerRemindersForTick(t *testing.T) {
 		p.API = api
 
 		p.TriggerRemindersForTick(testTime)
-
 	})
 
 	t.Run("if triggers channel reminder recurring", func(t *testing.T) {
@@ -237,14 +231,14 @@ func TestTriggerRemindersForTick(t *testing.T) {
 			{
 				Hostname:   hostname,
 				Id:         model.NewId(),
-				ReminderId: reminderId,
+				ReminderId: reminderID,
 				Occurrence: testTime,
 				Repeat:     "every tuesday at 3pm",
 			},
 		}
 		reminders := []Reminder{
 			{
-				Id:          reminderId,
+				Id:          reminderID,
 				TeamId:      model.NewId(),
 				Username:    user.Username,
 				Message:     "Hello",
@@ -273,13 +267,10 @@ func TestTriggerRemindersForTick(t *testing.T) {
 		p.API = api
 
 		p.TriggerRemindersForTick(testTime)
-
 	})
-
 }
 
 func TestGetReminder(t *testing.T) {
-
 	user := &model.User{
 		Email:    "-@-.-",
 		Nickname: "TestUser",
@@ -331,13 +322,10 @@ func TestGetReminder(t *testing.T) {
 
 		reminder := p.GetReminder(user.Id, reminders[0].Id)
 		assert.Equal(t, reminders[0].Id, reminder.Id)
-
 	})
-
 }
 
 func TestGetReminders(t *testing.T) {
-
 	user := &model.User{
 		Email:    "-@-.-",
 		Nickname: "TestUser",
@@ -388,13 +376,10 @@ func TestGetReminders(t *testing.T) {
 
 		reminders := p.GetReminders(user.Username)
 		assert.True(t, len(reminders) == 1)
-
 	})
-
 }
 
 func TestUpdateReminder(t *testing.T) {
-
 	user := &model.User{
 		Email:    "-@-.-",
 		Nickname: "TestUser",
@@ -445,13 +430,10 @@ func TestUpdateReminder(t *testing.T) {
 		p.API = api
 
 		assert.Nil(t, p.UpdateReminder(user.Id, reminders[0]))
-
 	})
-
 }
 
 func TestUpsertReminder(t *testing.T) {
-
 	user := &model.User{
 		Email:    "-@-.-",
 		Nickname: "TestUser",
@@ -517,13 +499,10 @@ func TestUpsertReminder(t *testing.T) {
 		p.API = api
 
 		assert.Nil(t, p.UpsertReminder(request))
-
 	})
-
 }
 
 func TestDeleteReminder(t *testing.T) {
-
 	user := &model.User{
 		Email:    "-@-.-",
 		Nickname: "TestUser",
@@ -574,9 +553,7 @@ func TestDeleteReminder(t *testing.T) {
 		p.API = api
 
 		assert.Nil(t, p.DeleteReminder(user.Id, reminders[0]))
-
 	})
-
 }
 
 func TestDeleteReminders(t *testing.T) {
@@ -629,7 +606,5 @@ func TestDeleteReminders(t *testing.T) {
 		p.API = api
 
 		assert.Equal(t, p.DeleteReminders(user), "clear.response")
-
 	})
-
 }

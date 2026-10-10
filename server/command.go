@@ -1,3 +1,4 @@
+// Package main implements the Remind plugin, a slash-command reminder scheduler.
 package main
 
 import (
@@ -23,8 +24,7 @@ func (p *Plugin) registerCommand() error {
 	return nil
 }
 
-func (p *Plugin) ExecuteCommand(c *plugin.Context, args *model.CommandArgs) (*model.CommandResponse, *model.AppError) {
-
+func (p *Plugin) ExecuteCommand(_ *plugin.Context, args *model.CommandArgs) (*model.CommandResponse, *model.AppError) {
 	user, uErr := p.API.GetUser(args.UserId)
 	if uErr != nil {
 		return &model.CommandResponse{}, uErr
@@ -42,7 +42,7 @@ func (p *Plugin) ExecuteCommand(c *plugin.Context, args *model.CommandArgs) (*mo
 	if strings.HasSuffix(command, T("help")) {
 		post := model.Post{
 			ChannelId: args.ChannelId,
-			UserId:    p.botUserId,
+			UserId:    p.botUserID,
 			Message:   T("help.response"),
 		}
 		p.API.SendEphemeralPost(user.Id, &post)
@@ -58,7 +58,7 @@ func (p *Plugin) ExecuteCommand(c *plugin.Context, args *model.CommandArgs) (*mo
 	if strings.HasSuffix(command, "__clear") {
 		post := model.Post{
 			ChannelId: args.ChannelId,
-			UserId:    p.botUserId,
+			UserId:    p.botUserID,
 			Message:   p.DeleteReminders(user),
 		}
 		p.API.SendEphemeralPost(user.Id, &post)
@@ -69,7 +69,7 @@ func (p *Plugin) ExecuteCommand(c *plugin.Context, args *model.CommandArgs) (*mo
 	if strings.HasSuffix(command, "__version") {
 		post := model.Post{
 			ChannelId: args.ChannelId,
-			UserId:    p.botUserId,
+			UserId:    p.botUserID,
 			Message:   strings.TrimPrefix(PluginVersion, "v"),
 		}
 		p.API.SendEphemeralPost(user.Id, &post)
@@ -80,14 +80,14 @@ func (p *Plugin) ExecuteCommand(c *plugin.Context, args *model.CommandArgs) (*mo
 	if strings.HasSuffix(command, "__user") {
 		post := model.Post{
 			ChannelId: args.ChannelId,
-			UserId:    p.botUserId,
+			UserId:    p.botUserID,
 			Message:   "locale: " + locale + "\nlocation: " + location.String(),
 		}
 		p.API.SendEphemeralPost(user.Id, &post)
 		return &model.CommandResponse{}, nil
 	}
 
-	payload := strings.Trim(strings.Replace(command, "/"+CommandTrigger, "", -1), " ")
+	payload := strings.Trim(strings.ReplaceAll(command, "/"+CommandTrigger, ""), " ")
 	request := ReminderRequest{
 		TeamId:   args.TeamId,
 		Username: user.Username,
@@ -99,7 +99,7 @@ func (p *Plugin) ExecuteCommand(c *plugin.Context, args *model.CommandArgs) (*mo
 	if err != nil {
 		post := model.Post{
 			ChannelId: args.ChannelId,
-			UserId:    p.botUserId,
+			UserId:    p.botUserID,
 			Message:   T("exception.response"),
 		}
 		p.API.SendEphemeralPost(user.Id, &post)
@@ -108,5 +108,4 @@ func (p *Plugin) ExecuteCommand(c *plugin.Context, args *model.CommandArgs) (*mo
 
 	p.API.SendEphemeralPost(user.Id, reminder)
 	return &model.CommandResponse{}, nil
-
 }

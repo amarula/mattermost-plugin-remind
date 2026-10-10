@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"encoding/json"
+
 	"github.com/mattermost/mattermost/server/public/model"
 	"github.com/mattermost/mattermost/server/public/plugin/plugintest"
 	"github.com/stretchr/testify/assert"
@@ -129,7 +130,6 @@ func TestListReminders(t *testing.T) {
 }
 
 func TestUpdateListReminders(t *testing.T) {
-
 	user := &model.User{
 		Email:    "-@-.-",
 		Nickname: "TestUser",
@@ -184,7 +184,6 @@ func TestUpdateListReminders(t *testing.T) {
 	}
 
 	t.Run("if update list happens", func(t *testing.T) {
-
 		api := setupAPI()
 		defer api.AssertExpectations(t)
 
@@ -192,13 +191,10 @@ func TestUpdateListReminders(t *testing.T) {
 		p.API = api
 
 		p.UpdateListReminders(user.Id, model.NewId(), channel.Id, 0)
-
 	})
-
 }
 
 func TestListCompletedReminders(t *testing.T) {
-
 	user := &model.User{
 		Email:    "-@-.-",
 		Nickname: "TestUser",
@@ -253,7 +249,6 @@ func TestListCompletedReminders(t *testing.T) {
 	}
 
 	t.Run("if list completed happens", func(t *testing.T) {
-
 		api := setupAPI()
 		defer api.AssertExpectations(t)
 
@@ -261,13 +256,10 @@ func TestListCompletedReminders(t *testing.T) {
 		p.API = api
 
 		p.ListCompletedReminders(user.Id, post.Id, channel.Id)
-
 	})
-
 }
 
 func TestDeleteCompletedReminders(t *testing.T) {
-
 	user := &model.User{
 		Email:    "-@-.-",
 		Nickname: "TestUser",
@@ -310,7 +302,6 @@ func TestDeleteCompletedReminders(t *testing.T) {
 	}
 
 	t.Run("if delete completed happens", func(t *testing.T) {
-
 		api := setupAPI()
 		defer api.AssertExpectations(t)
 
@@ -318,7 +309,5 @@ func TestDeleteCompletedReminders(t *testing.T) {
 		p.API = api
 
 		p.DeleteCompletedReminders(user.Id)
-
 	})
-
 }

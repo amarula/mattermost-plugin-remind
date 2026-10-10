@@ -15,8 +15,8 @@ import (
 func TestTranslationsPreInit(t *testing.T) {
 	tmpDir := os.TempDir()
 	assetsPath := filepath.Join(tmpDir, "assets")
-	defer os.RemoveAll(assetsPath)
-	err := os.Mkdir(assetsPath, 0777)
+	defer func() { _ = os.RemoveAll(assetsPath) }()
+	err := os.Mkdir(assetsPath, 0o750)
 	require.NoError(t, err)
 
 	i18nPath := filepath.Join(tmpDir, "assets", "i18n")
@@ -39,16 +39,16 @@ func TestTranslationsPreInit(t *testing.T) {
 
 		defer api.AssertExpectations(t)
 
+		//nolint:gosec // a fixed file name inside the test's own temp directory
 		file, err := os.Create(i18nPath)
 		require.NoError(t, err)
-		file.Close()
-		defer os.Remove(file.Name())
+		require.NoError(t, file.Close())
+		defer func() { _ = os.Remove(file.Name()) }()
 
 		p := &Plugin{}
 		p.API = api
 		err = p.TranslationsPreInit()
 		require.True(t, strings.Contains(err.Error(), "unable to read i18n directory"))
-
 	})
 
 	t.Run("no i18n files", func(t *testing.T) {
@@ -57,9 +57,9 @@ func TestTranslationsPreInit(t *testing.T) {
 
 		defer api.AssertExpectations(t)
 
-		err := os.Mkdir(i18nPath, 0777)
+		err := os.Mkdir(i18nPath, 0o750)
 		require.NoError(t, err)
-		defer os.Remove(i18nPath)
+		defer func() { _ = os.Remove(i18nPath) }()
 
 		p := &Plugin{}
 		p.API = api
@@ -81,19 +81,19 @@ func TestTranslationsPreInit(t *testing.T) {
 
 		defer api.AssertExpectations(t)
 
-		err := os.Mkdir(i18nPath, 0777)
+		err := os.Mkdir(i18nPath, 0o750)
 		require.NoError(t, err)
 
-		err = os.WriteFile(filepath.Join(i18nPath, "not-i18n.txt"), []byte{}, 0777)
+		err = os.WriteFile(filepath.Join(i18nPath, "not-i18n.txt"), []byte{}, 0o600)
 		require.NoError(t, err)
 
-		err = os.WriteFile(filepath.Join(i18nPath, "invalid.json"), []byte{}, 0777)
+		err = os.WriteFile(filepath.Join(i18nPath, "invalid.json"), []byte{}, 0o600)
 		require.NoError(t, err)
 
-		err = os.WriteFile(filepath.Join(i18nPath, "en.json"), []byte(`[{"id":"id","translation":"translation"}]`), 0777)
+		err = os.WriteFile(filepath.Join(i18nPath, "en.json"), []byte(`[{"id":"id","translation":"translation"}]`), 0o600)
 		require.NoError(t, err)
 
-		err = os.WriteFile(filepath.Join(i18nPath, "es.json"), []byte(`[{"id":"id","translation":"translation2"}]`), 0777)
+		err = os.WriteFile(filepath.Join(i18nPath, "es.json"), []byte(`[{"id":"id","translation":"translation2"}]`), 0o600)
 		require.NoError(t, err)
 
 		p := NewPlugin()

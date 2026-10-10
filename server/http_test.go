@@ -21,22 +21,22 @@ func TestHandleDialog(t *testing.T) {
 		Id:       model.NewId(),
 		Username: model.NewRandomString(10),
 	}
-	testTime := time.Now().UTC().Round(time.Second).Add(20 * time.Duration(time.Minute))
+	testTime := time.Now().UTC().Round(time.Second).Add(20 * time.Minute)
 	hostname, _ := os.Hostname()
-	reminderId := model.NewId()
+	reminderID := model.NewId()
 
 	occurrences := []Occurrence{
 		{
 			Hostname:   hostname,
 			Id:         model.NewId(),
-			ReminderId: reminderId,
+			ReminderId: reminderID,
 			Occurrence: testTime,
 		},
 	}
 
 	reminders := []Reminder{
 		{
-			Id:          reminderId,
+			Id:          reminderID,
 			TeamId:      model.NewId(),
 			Username:    user.Username,
 			Message:     "Hello",
@@ -54,7 +54,7 @@ func TestHandleDialog(t *testing.T) {
 		api.On("LogDebug", mock.Anything, mock.Anything, mock.Anything).Maybe()
 		api.On("LogError", mock.Anything, mock.Anything, mock.Anything).Maybe()
 		api.On("LogInfo", mock.Anything).Maybe()
-		api.On("KVGet", string(fmt.Sprintf("%v", testTime))).Return(stringOccurrences, nil)
+		api.On("KVGet", fmt.Sprintf("%v", testTime)).Return(stringOccurrences, nil)
 		api.On("KVGet", user.Username).Return(stringReminders, nil)
 		api.On("KVSet", mock.Anything, mock.Anything).Return(nil)
 		api.On("GetUser", mock.Anything).Return(user, nil)
@@ -65,7 +65,6 @@ func TestHandleDialog(t *testing.T) {
 	}
 
 	t.Run("view dialog", func(t *testing.T) {
-
 		api := setupAPI()
 		defer api.AssertExpectations(t)
 
@@ -94,12 +93,10 @@ func TestHandleDialog(t *testing.T) {
 		assert.Nil(t, err)
 		bodyString := string(bodyBytes)
 		assert.Equal(t, bodyString, "")
-
 	})
 }
 
 func TestHandleViewEphmeral(t *testing.T) {
-
 	user := &model.User{
 		Id:       model.NewId(),
 		Username: model.NewRandomString(10),
@@ -142,7 +139,6 @@ func TestHandleViewEphmeral(t *testing.T) {
 	}
 
 	t.Run("view ephemeral", func(t *testing.T) {
-
 		api := setupAPI()
 		defer api.AssertExpectations(t)
 
@@ -171,9 +167,7 @@ func TestHandleViewEphmeral(t *testing.T) {
 		assert.Nil(t, err)
 		bodyString := string(bodyBytes)
 		assert.Equal(t, bodyString, "{\"update\":null,\"ephemeral_text\":\"\",\"skip_slack_parsing\":false}")
-
 	})
-
 }
 
 func TestHandleComplete(t *testing.T) {
@@ -228,7 +222,6 @@ func TestHandleComplete(t *testing.T) {
 	}
 
 	t.Run("complete", func(t *testing.T) {
-
 		api := setupAPI()
 		defer api.AssertExpectations(t)
 
@@ -258,13 +251,10 @@ func TestHandleComplete(t *testing.T) {
 		assert.Nil(t, err)
 		bodyString := string(bodyBytes)
 		assert.Equal(t, bodyString, "{\"update\":null,\"ephemeral_text\":\"\",\"skip_slack_parsing\":false}")
-
 	})
-
 }
 
 func TestHandleDelete(t *testing.T) {
-
 	user := &model.User{
 		Id:       model.NewId(),
 		Username: model.NewRandomString(10),
@@ -311,7 +301,6 @@ func TestHandleDelete(t *testing.T) {
 	}
 
 	t.Run("delete", func(t *testing.T) {
-
 		api := setupAPI()
 		defer api.AssertExpectations(t)
 
@@ -341,9 +330,7 @@ func TestHandleDelete(t *testing.T) {
 		assert.Nil(t, err)
 		bodyString := string(bodyBytes)
 		assert.Equal(t, bodyString, "{\"update\":null,\"ephemeral_text\":\"\",\"skip_slack_parsing\":false}")
-
 	})
-
 }
 
 func TestHandleDeleteEphemeral(t *testing.T) {
@@ -392,7 +379,6 @@ func TestHandleDeleteEphemeral(t *testing.T) {
 	}
 
 	t.Run("delete ephemeral", func(t *testing.T) {
-
 		api := setupAPI()
 		defer api.AssertExpectations(t)
 
@@ -421,13 +407,10 @@ func TestHandleDeleteEphemeral(t *testing.T) {
 		assert.Nil(t, err)
 		bodyString := string(bodyBytes)
 		assert.Equal(t, bodyString, "{\"update\":null,\"ephemeral_text\":\"\",\"skip_slack_parsing\":false}")
-
 	})
-
 }
 
 func TestHandleSnooze(t *testing.T) {
-
 	user := &model.User{
 		Id:       model.NewId(),
 		Username: model.NewRandomString(10),
@@ -493,9 +476,7 @@ func TestHandleSnooze(t *testing.T) {
 			SnoozeTime: "nextweek",
 		},
 	} {
-
 		t.Run(name, func(t *testing.T) {
-
 			api := setupAPI()
 			defer api.AssertExpectations(t)
 
@@ -526,13 +507,11 @@ func TestHandleSnooze(t *testing.T) {
 			assert.Nil(t, err)
 			bodyString := string(bodyBytes)
 			assert.Equal(t, bodyString, "{\"update\":null,\"ephemeral_text\":\"\",\"skip_slack_parsing\":false}")
-
 		})
 	}
 }
 
 func TestHandleNextReminders(t *testing.T) {
-
 	user := &model.User{
 		Id:       model.NewId(),
 		Username: model.NewRandomString(10),
@@ -577,7 +556,6 @@ func TestHandleNextReminders(t *testing.T) {
 	}
 
 	t.Run("next reminders", func(t *testing.T) {
-
 		api := setupAPI()
 		defer api.AssertExpectations(t)
 
@@ -607,12 +585,10 @@ func TestHandleNextReminders(t *testing.T) {
 		assert.Nil(t, err)
 		bodyString := string(bodyBytes)
 		assert.Equal(t, bodyString, "{\"update\":null,\"ephemeral_text\":\"\",\"skip_slack_parsing\":false}")
-
 	})
 }
 
 func TestHandleCompleteList(t *testing.T) {
-
 	user := &model.User{
 		Id:       model.NewId(),
 		Username: model.NewRandomString(10),
@@ -660,7 +636,6 @@ func TestHandleCompleteList(t *testing.T) {
 	}
 
 	t.Run("complete list", func(t *testing.T) {
-
 		api := setupAPI()
 		defer api.AssertExpectations(t)
 
@@ -690,12 +665,10 @@ func TestHandleCompleteList(t *testing.T) {
 		assert.Nil(t, err)
 		bodyString := string(bodyBytes)
 		assert.Equal(t, bodyString, "{\"update\":null,\"ephemeral_text\":\"\",\"skip_slack_parsing\":false}")
-
 	})
 }
 
 func TestHandleViewCompleteList(t *testing.T) {
-
 	user := &model.User{
 		Id:       model.NewId(),
 		Username: model.NewRandomString(10),
@@ -740,7 +713,6 @@ func TestHandleViewCompleteList(t *testing.T) {
 	}
 
 	t.Run("view complete list", func(t *testing.T) {
-
 		api := setupAPI()
 		defer api.AssertExpectations(t)
 
@@ -762,9 +734,7 @@ func TestHandleViewCompleteList(t *testing.T) {
 		assert.Nil(t, err)
 		bodyString := string(bodyBytes)
 		assert.Equal(t, bodyString, "{\"update\":null,\"ephemeral_text\":\"\",\"skip_slack_parsing\":false}")
-
 	})
-
 }
 
 func TestHandleDeleteList(t *testing.T) {
@@ -813,7 +783,6 @@ func TestHandleDeleteList(t *testing.T) {
 	}
 
 	t.Run("delete list item", func(t *testing.T) {
-
 		api := setupAPI()
 		defer api.AssertExpectations(t)
 
@@ -843,13 +812,10 @@ func TestHandleDeleteList(t *testing.T) {
 		assert.Nil(t, err)
 		bodyString := string(bodyBytes)
 		assert.Equal(t, bodyString, "{\"update\":null,\"ephemeral_text\":\"\",\"skip_slack_parsing\":false}")
-
 	})
-
 }
 
 func TestHandleDeleteCompleteList(t *testing.T) {
-
 	user := &model.User{
 		Id:       model.NewId(),
 		Username: model.NewRandomString(10),
@@ -894,7 +860,6 @@ func TestHandleDeleteCompleteList(t *testing.T) {
 	}
 
 	t.Run("delete completed list", func(t *testing.T) {
-
 		api := setupAPI()
 		defer api.AssertExpectations(t)
 
@@ -924,12 +889,10 @@ func TestHandleDeleteCompleteList(t *testing.T) {
 		assert.Nil(t, err)
 		bodyString := string(bodyBytes)
 		assert.Equal(t, bodyString, "{\"update\":null,\"ephemeral_text\":\"\",\"skip_slack_parsing\":false}")
-
 	})
 }
 
 func TestHandleSnoozeList(t *testing.T) {
-
 	user := &model.User{
 		Id:       model.NewId(),
 		Username: model.NewRandomString(10),
@@ -994,9 +957,7 @@ func TestHandleSnoozeList(t *testing.T) {
 			SnoozeTime: "nextweek",
 		},
 	} {
-
 		t.Run(name, func(t *testing.T) {
-
 			api := setupAPI()
 			defer api.AssertExpectations(t)
 
@@ -1027,13 +988,11 @@ func TestHandleSnoozeList(t *testing.T) {
 			assert.Nil(t, err)
 			bodyString := string(bodyBytes)
 			assert.Equal(t, bodyString, "{\"update\":null,\"ephemeral_text\":\"\",\"skip_slack_parsing\":false}")
-
 		})
 	}
 }
 
 func TestHandleCloseList(t *testing.T) {
-
 	setupAPI := func() *plugintest.API {
 		api := &plugintest.API{}
 		api.On("LogDebug", mock.Anything, mock.Anything, mock.Anything).Maybe()
@@ -1044,7 +1003,6 @@ func TestHandleCloseList(t *testing.T) {
 	}
 
 	t.Run("closes list", func(t *testing.T) {
-
 		api := setupAPI()
 		defer api.AssertExpectations(t)
 
@@ -1066,6 +1024,5 @@ func TestHandleCloseList(t *testing.T) {
 		assert.Nil(t, err)
 		bodyString := string(bodyBytes)
 		assert.Equal(t, bodyString, "{\"update\":null,\"ephemeral_text\":\"\",\"skip_slack_parsing\":false}")
-
 	})
 }

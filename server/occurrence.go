@@ -31,8 +31,7 @@ type Occurrence struct {
 }
 
 func (p *Plugin) ClearScheduledOccurrence(reminder Reminder, occurrence Occurrence) {
-
-	bytes, err := p.API.KVGet(string(fmt.Sprintf("%v", occurrence.Occurrence)))
+	bytes, err := p.API.KVGet(fmt.Sprintf("%v", occurrence.Occurrence))
 	if err != nil {
 		p.API.LogError("failed KVGet %s", err)
 		return
@@ -56,16 +55,14 @@ func (p *Plugin) ClearScheduledOccurrence(reminder Reminder, occurrence Occurren
 		return
 	}
 
-	kvErr := p.API.KVSet(string(fmt.Sprintf("%v", occurrence.Occurrence)), ro)
+	kvErr := p.API.KVSet(fmt.Sprintf("%v", occurrence.Occurrence), ro)
 	if kvErr != nil {
-		p.API.LogError("failed to store occurence %s", kvErr)
+		p.API.LogError("failed to store occurrence %s", kvErr)
 	}
-
 }
 
 func (p *Plugin) deleteSnoozedOccurrence(occurrence Occurrence) {
-
-	bytes, err := p.API.KVGet(string(fmt.Sprintf("%v", occurrence.Snoozed)))
+	bytes, err := p.API.KVGet(fmt.Sprintf("%v", occurrence.Snoozed))
 	if err != nil {
 		p.API.LogError("failed KVGet %s", err)
 		return
@@ -89,14 +86,14 @@ func (p *Plugin) deleteSnoozedOccurrence(occurrence Occurrence) {
 		return
 	}
 
-	kvErr := p.API.KVSet(string(fmt.Sprintf("%v", occurrence.Occurrence)), ro)
+	kvErr := p.API.KVSet(fmt.Sprintf("%v", occurrence.Occurrence), ro)
 	if kvErr != nil {
-		p.API.LogError("failed to store ocurrence %s", kvErr)
+		p.API.LogError("failed to store occurrence %s", kvErr)
 	}
 }
 
 func (p *Plugin) deleteOccurrence(occurrence Occurrence) {
-	bytes, err := p.API.KVGet(string(fmt.Sprintf("%v", occurrence.Occurrence)))
+	bytes, err := p.API.KVGet(fmt.Sprintf("%v", occurrence.Occurrence))
 	if err != nil {
 		p.API.LogError("failed KVGet %s", err)
 		return
@@ -120,14 +117,13 @@ func (p *Plugin) deleteOccurrence(occurrence Occurrence) {
 		return
 	}
 
-	kvErr := p.API.KVSet(string(fmt.Sprintf("%v", occurrence.Occurrence)), ro)
+	kvErr := p.API.KVSet(fmt.Sprintf("%v", occurrence.Occurrence), ro)
 	if kvErr != nil {
 		p.API.LogError("failed to store occurrence %s", kvErr)
 	}
 }
 
 func (p *Plugin) CreateOccurrences(request *ReminderRequest) error {
-
 	user, uErr := p.API.GetUserByUsername(request.Username)
 	if uErr != nil {
 		return uErr
@@ -140,11 +136,9 @@ func (p *Plugin) CreateOccurrences(request *ReminderRequest) error {
 	default:
 		return p.createOccurrencesEN(request)
 	}
-
 }
 
 func (p *Plugin) createOccurrencesEN(request *ReminderRequest) error {
-
 	user, uErr := p.API.GetUserByUsername(request.Username)
 	if uErr != nil {
 		return uErr
@@ -188,11 +182,9 @@ func (p *Plugin) createOccurrencesEN(request *ReminderRequest) error {
 	} else {
 		return p.addOccurrences(request, occurrences)
 	}
-
 }
 
 func (p *Plugin) addOccurrences(request *ReminderRequest, occurrences []time.Time) error {
-
 	user, uErr := p.API.GetUserByUsername(request.Username)
 	if uErr != nil {
 		return uErr
@@ -200,14 +192,12 @@ func (p *Plugin) addOccurrences(request *ReminderRequest, occurrences []time.Tim
 	T, _ := p.translation(user)
 
 	for _, o := range occurrences {
-
 		repeat := ""
 
 		if p.isRepeating(request) {
 			repeat = request.Reminder.When
 			if strings.HasPrefix(request.Reminder.Target, "@") &&
 				request.Reminder.Target != T("me") {
-
 				rUser, rErr := p.API.GetUserByUsername(request.Username)
 				if rErr != nil {
 					return rErr
@@ -218,12 +208,9 @@ func (p *Plugin) addOccurrences(request *ReminderRequest, occurrences []time.Tim
 				}
 				if tUser, tErr := p.API.GetUserByUsername(target); tErr != nil {
 					return tErr
-				} else {
-					if rUser.Id != tUser.Id {
-						return errors.New("repeating reminders for another user not permitted")
-					}
+				} else if rUser.Id != tUser.Id {
+					return errors.New("repeating reminders for another user not permitted")
 				}
-
 			}
 		}
 
@@ -241,14 +228,12 @@ func (p *Plugin) addOccurrences(request *ReminderRequest, occurrences []time.Tim
 		request.Reminder.Occurrences = append(request.Reminder.Occurrences, occurrence)
 
 		p.upsertOccurrence(&occurrence)
-
 	}
 
 	return nil
 }
 
 func (p *Plugin) isRepeating(request *ReminderRequest) bool {
-
 	user, uErr := p.API.GetUserByUsername(request.Username)
 	if uErr != nil {
 		p.API.LogError(uErr.Error())
@@ -264,12 +249,10 @@ func (p *Plugin) isRepeating(request *ReminderRequest) bool {
 		strings.Contains(request.Reminder.When, T("thursdays")) ||
 		strings.Contains(request.Reminder.When, T("fridays")) ||
 		strings.Contains(request.Reminder.When, T("saturdays"))
-
 }
 
 func (p *Plugin) upsertOccurrence(occurrence *Occurrence) []Occurrence {
-
-	bytes, err := p.API.KVGet(string(fmt.Sprintf("%v", occurrence.Occurrence)))
+	bytes, err := p.API.KVGet(fmt.Sprintf("%v", occurrence.Occurrence))
 	if err != nil {
 		p.API.LogError("failed KVGet %s", err)
 		return nil
@@ -278,7 +261,7 @@ func (p *Plugin) upsertOccurrence(occurrence *Occurrence) []Occurrence {
 	var occurrences []Occurrence
 	roErr := json.Unmarshal(bytes, &occurrences)
 	if roErr != nil {
-		p.API.LogDebug("new occurrence " + string(fmt.Sprintf("%v", occurrence.Occurrence)))
+		p.API.LogDebug("new occurrence " + fmt.Sprintf("%v", occurrence.Occurrence))
 	}
 
 	occurrences = append(occurrences, *occurrence)
@@ -288,18 +271,16 @@ func (p *Plugin) upsertOccurrence(occurrence *Occurrence) []Occurrence {
 		return occurrences
 	}
 
-	kvErr := p.API.KVSet(string(fmt.Sprintf("%v", occurrence.Occurrence)), ro)
+	kvErr := p.API.KVSet(fmt.Sprintf("%v", occurrence.Occurrence), ro)
 	if kvErr != nil {
-		p.API.LogDebug("failed to store occurence %s", kvErr)
+		p.API.LogDebug("failed to store occurrence %s", kvErr)
 	}
 
 	return occurrences
-
 }
 
 func (p *Plugin) upsertSnoozedOccurrence(occurrence *Occurrence) []Occurrence {
-
-	bytes, err := p.API.KVGet(string(fmt.Sprintf("%v", occurrence.Snoozed)))
+	bytes, err := p.API.KVGet(fmt.Sprintf("%v", occurrence.Snoozed))
 	if err != nil {
 		p.API.LogError("failed KVGet %s", err)
 		return nil
@@ -308,7 +289,7 @@ func (p *Plugin) upsertSnoozedOccurrence(occurrence *Occurrence) []Occurrence {
 	var occurrences []Occurrence
 	roErr := json.Unmarshal(bytes, &occurrences)
 	if roErr != nil {
-		p.API.LogDebug("new snoozed occurrence " + string(fmt.Sprintf("%v", occurrence.Snoozed)))
+		p.API.LogDebug("new snoozed occurrence " + fmt.Sprintf("%v", occurrence.Snoozed))
 	}
 
 	occurrences = append(occurrences, *occurrence)
@@ -318,16 +299,14 @@ func (p *Plugin) upsertSnoozedOccurrence(occurrence *Occurrence) []Occurrence {
 		return occurrences
 	}
 
-	kvErr := p.API.KVSet(string(fmt.Sprintf("%v", occurrence.Snoozed)), ro)
+	kvErr := p.API.KVSet(fmt.Sprintf("%v", occurrence.Snoozed), ro)
 	if kvErr != nil {
 		p.API.LogDebug("failed snoozed occurrence %s", kvErr)
 	}
 	return occurrences
-
 }
 
 func (p *Plugin) in(when string, user *model.User) (times []time.Time, err error) {
-
 	_, locale := p.translation(user)
 
 	switch locale {
@@ -336,11 +315,9 @@ func (p *Plugin) in(when string, user *model.User) (times []time.Time, err error
 	default:
 		return p.inEN(when, user)
 	}
-
 }
 
 func (p *Plugin) inEN(when string, user *model.User) (times []time.Time, err error) {
-
 	T, _ := p.translation(user)
 
 	when = strings.Trim(when, " ")
@@ -574,11 +551,9 @@ func (p *Plugin) inEN(when string, user *model.User) (times []time.Time, err err
 	default:
 		return nil, errors.New("could not format 'in'")
 	}
-
 }
 
 func (p *Plugin) at(when string, user *model.User) (times []time.Time, err error) {
-
 	_, locale := p.translation(user)
 
 	switch locale {
@@ -587,7 +562,6 @@ func (p *Plugin) at(when string, user *model.User) (times []time.Time, err error
 	default:
 		return p.atEN(when, user)
 	}
-
 }
 
 func (p *Plugin) atEN(when string, user *model.User) (times []time.Time, err error) {
@@ -599,24 +573,21 @@ func (p *Plugin) atEN(when string, user *model.User) (times []time.Time, err err
 	normalizedWhen := strings.ToLower(whenSplit[1])
 
 	if strings.Contains(when, T("every")) {
-
 		dateTimeSplit := strings.Split(when, " "+T("every")+" ")
 		if len(dateTimeSplit) < 2 {
 			return []time.Time{}, errors.New("empty date time split")
 		}
 		return p.every(T("every")+" "+dateTimeSplit[1]+" "+dateTimeSplit[0], user)
-
 	} else if len(whenSplit) >= 3 &&
 		(strings.EqualFold(whenSplit[2], T("pm")) ||
 			strings.EqualFold(whenSplit[2], T("am"))) {
-
 		if !strings.Contains(normalizedWhen, ":") {
 			if len(normalizedWhen) >= 3 {
-				hrs := string(normalizedWhen[:len(normalizedWhen)-2])
-				mins := string(normalizedWhen[len(normalizedWhen)-2:])
+				hrs := normalizedWhen[:len(normalizedWhen)-2]
+				mins := normalizedWhen[len(normalizedWhen)-2:]
 				normalizedWhen = hrs + ":" + mins
 			} else {
-				normalizedWhen = normalizedWhen + ":00"
+				normalizedWhen += ":00"
 			}
 		}
 		t, pErr := time.ParseInLocation(time.Kitchen, normalizedWhen+strings.ToUpper(whenSplit[2]), location)
@@ -635,10 +606,8 @@ func (p *Plugin) atEN(when string, user *model.User) (times []time.Time, err err
 		}
 
 		return []time.Time{p.chooseClosest(user, &occurrence, true).UTC()}, nil
-
 	} else if strings.HasSuffix(normalizedWhen, T("pm")) ||
 		strings.HasSuffix(normalizedWhen, T("am")) {
-
 		if !strings.Contains(normalizedWhen, ":") {
 			var s string
 			var s2 string
@@ -658,7 +627,6 @@ func (p *Plugin) atEN(when string, user *model.User) (times []time.Time, err err
 			} else {
 				normalizedWhen = s + ":00" + s2
 			}
-
 		}
 		t, pErr := time.ParseInLocation(time.Kitchen, strings.ToUpper(normalizedWhen), location)
 
@@ -676,11 +644,9 @@ func (p *Plugin) atEN(when string, user *model.User) (times []time.Time, err err
 		}
 
 		return []time.Time{p.chooseClosest(user, &occurrence, true).UTC()}, nil
-
 	}
 
 	switch normalizedWhen {
-
 	case T("noon"):
 
 		now := time.Now().In(location)
@@ -721,7 +687,7 @@ func (p *Plugin) atEN(when string, user *model.User) (times []time.Time, err err
 		T("twelve"):
 
 		now := time.Now().In(location)
-		ampm := string(now.Format(time.Kitchen)[len(now.Format(time.Kitchen))-2:])
+		ampm := now.Format(time.Kitchen)[len(now.Format(time.Kitchen))-2:]
 
 		num, wErr := p.wordToNumber(normalizedWhen, user)
 		if wErr != nil {
@@ -748,7 +714,7 @@ func (p *Plugin) atEN(when string, user *model.User) (times []time.Time, err err
 		T("12"):
 
 		now := time.Now().In(location)
-		ampm := string(now.Format(time.Kitchen)[len(now.Format(time.Kitchen))-2:])
+		ampm := now.Format(time.Kitchen)[len(now.Format(time.Kitchen))-2:]
 
 		num, wErr := strconv.Atoi(normalizedWhen)
 		if wErr != nil {
@@ -797,12 +763,10 @@ func (p *Plugin) atEN(when string, user *model.User) (times []time.Time, err err
 		}
 
 		return []time.Time{p.chooseClosest(user, &occurrence, dayInterval).UTC()}, nil
-
 	}
 }
 
 func (p *Plugin) on(when string, user *model.User) (times []time.Time, err error) {
-
 	_, locale := p.translation(user)
 
 	switch locale {
@@ -811,11 +775,9 @@ func (p *Plugin) on(when string, user *model.User) (times []time.Time, err error
 	default:
 		return p.onEN(when, user)
 	}
-
 }
 
 func (p *Plugin) onEN(when string, user *model.User) (times []time.Time, err error) {
-
 	T, _ := p.translation(user)
 	location := p.location(user)
 
@@ -916,7 +878,6 @@ func (p *Plugin) onEN(when string, user *model.User) (times []time.Time, err err
 				T("at")+" "+
 				timeUnit[:len(timeUnit)-3],
 			user)
-
 	}
 
 	dateSplit := p.regSplit(dateUnit, "T|Z")
@@ -940,11 +901,9 @@ func (p *Plugin) onEN(when string, user *model.User) (times []time.Time, err err
 		second, 0, location)
 
 	return []time.Time{t.UTC()}, nil
-
 }
 
 func (p *Plugin) every(when string, user *model.User) (times []time.Time, err error) {
-
 	_, locale := p.translation(user)
 
 	switch locale {
@@ -953,11 +912,9 @@ func (p *Plugin) every(when string, user *model.User) (times []time.Time, err er
 	default:
 		return p.everyEN(when, user)
 	}
-
 }
 
 func (p *Plugin) everyEN(when string, user *model.User) (times []time.Time, err error) {
-
 	T, _ := p.translation(user)
 	location := p.location(user)
 
@@ -992,7 +949,6 @@ func (p *Plugin) everyEN(when string, user *model.User) (times []time.Time, err 
 	days := p.regSplit(chronoDate, "("+T("and")+")|(,)")
 
 	for _, chrono := range days {
-
 		dateUnit, ndErr := p.normalizeDate(strings.Trim(chrono, " "), user)
 		if ndErr != nil {
 			return []time.Time{}, ndErr
@@ -1115,17 +1071,13 @@ func (p *Plugin) everyEN(when string, user *model.User) (times []time.Time, err 
 				second, 0, location)
 
 			times = append(times, t.UTC())
-
 		}
-
 	}
 
 	return times, nil
-
 }
 
 func (p *Plugin) freeForm(when string, user *model.User) (times []time.Time, err error) {
-
 	_, locale := p.translation(user)
 
 	switch locale {
@@ -1134,11 +1086,9 @@ func (p *Plugin) freeForm(when string, user *model.User) (times []time.Time, err
 	default:
 		return p.freeFormEN(when, user)
 	}
-
 }
 
 func (p *Plugin) freeFormEN(when string, user *model.User) (times []time.Time, err error) {
-
 	T, _ := p.translation(user)
 	location := p.location(user)
 
@@ -1227,11 +1177,9 @@ func (p *Plugin) freeFormEN(when string, user *model.User) (times []time.Time, e
 				timeUnit,
 			user)
 	}
-
 }
 
 func (p *Plugin) formatWhen(username string, when string, occurrence string, snoozed bool) string {
-
 	user, uErr := p.API.GetUserByUsername(username)
 	if uErr != nil {
 		return ""
@@ -1247,7 +1195,6 @@ func (p *Plugin) formatWhen(username string, when string, occurrence string, sno
 }
 
 func (p *Plugin) formatWhenEN(username string, when string, occurrence string, snoozed bool) string {
-
 	user, uErr := p.API.GetUserByUsername(username)
 	if uErr != nil {
 		p.API.LogError(uErr.Error())
@@ -1259,7 +1206,6 @@ func (p *Plugin) formatWhenEN(username string, when string, occurrence string, s
 	t, _ := time.Parse(time.RFC3339, occurrence)
 
 	if strings.HasPrefix(when, T("in")) {
-
 		endDate := ""
 		if now.YearDay() == t.YearDay() {
 			endDate = T("today")
@@ -1276,7 +1222,6 @@ func (p *Plugin) formatWhenEN(username string, when string, occurrence string, s
 	}
 
 	if strings.HasPrefix(when, T("at")) {
-
 		endDate := ""
 		if now.YearDay() == t.YearDay() {
 			endDate = T("today")
@@ -1290,11 +1235,9 @@ func (p *Plugin) formatWhenEN(username string, when string, occurrence string, s
 			prefix = T("at") + " "
 		}
 		return prefix + t.Format(time.Kitchen) + " " + endDate + "."
-
 	}
 
 	if strings.HasPrefix(when, T("on")) {
-
 		endDate := ""
 		if now.YearDay() == t.YearDay() {
 			endDate = T("today")
@@ -1308,13 +1251,11 @@ func (p *Plugin) formatWhenEN(username string, when string, occurrence string, s
 			prefix = T("at") + " "
 		}
 		return prefix + t.Format(time.Kitchen) + " " + endDate + "."
-
 	}
 
 	if strings.HasPrefix(when, T("every")) {
-
 		repeatDate := strings.Trim(strings.Split(when, T("at"))[0], " ")
-		repeatDate = strings.Replace(repeatDate, T("every"), "", -1)
+		repeatDate = strings.ReplaceAll(repeatDate, T("every"), "")
 		caser := cases.Title(language.English)
 		repeatDate = caser.String(strings.ToLower(repeatDate))
 		repeatDate = T("every") + repeatDate
@@ -1323,7 +1264,6 @@ func (p *Plugin) formatWhenEN(username string, when string, occurrence string, s
 			prefix = T("at") + " "
 		}
 		return prefix + t.Format(time.Kitchen) + " " + repeatDate + "."
-
 	}
 
 	endDate := ""
@@ -1339,11 +1279,9 @@ func (p *Plugin) formatWhenEN(username string, when string, occurrence string, s
 		prefix = T("at") + " "
 	}
 	return prefix + t.Format(time.Kitchen) + " " + endDate + "."
-
 }
 
 func (p *Plugin) chooseClosest(user *model.User, chosen *time.Time, dayInterval bool) time.Time {
-
 	location := p.location(user)
 	now := time.Now().In(location)
 

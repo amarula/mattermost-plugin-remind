@@ -12,7 +12,6 @@ import (
 )
 
 func (p *Plugin) ParseRequest(request *ReminderRequest) error {
-
 	user, uErr := p.API.GetUserByUsername(request.Username)
 	if uErr != nil {
 		return uErr
@@ -24,21 +23,19 @@ func (p *Plugin) ParseRequest(request *ReminderRequest) error {
 	if strings.HasPrefix(request.Payload, T("me")) ||
 		strings.HasPrefix(request.Payload, "~") ||
 		strings.HasPrefix(request.Payload, "@") {
-
 		request.Reminder.Target = commandSplit[0]
 
 		firstIndex := strings.Index(request.Payload, "\"")
 		lastIndex := strings.LastIndex(request.Payload, "\"")
 
 		if firstIndex > -1 && lastIndex > -1 && firstIndex != lastIndex { // has quotes
-
 			message := request.Payload[firstIndex : lastIndex+1]
 
-			when := strings.Replace(request.Payload, message, "", -1)
+			when := strings.ReplaceAll(request.Payload, message, "")
 			when = strings.Replace(when, request.Reminder.Target, "", 1)
 			when = strings.Trim(when, " ")
 
-			message = strings.Replace(message, "\"", "", -1)
+			message = strings.ReplaceAll(message, "\"", "")
 
 			request.Reminder.When = when
 			request.Reminder.Message = message
@@ -54,7 +51,7 @@ func (p *Plugin) ParseRequest(request *ReminderRequest) error {
 			request.Reminder.When = request.Reminder.When[0:toIndex]
 		}
 
-		message := strings.Replace(request.Payload, request.Reminder.When, "", -1)
+		message := strings.ReplaceAll(request.Payload, request.Reminder.When, "")
 		message = strings.Replace(message, request.Reminder.Target, "", 1)
 		message = strings.Trim(message, " \"")
 
@@ -64,7 +61,6 @@ func (p *Plugin) ParseRequest(request *ReminderRequest) error {
 		request.Reminder.Message = message
 
 		return nil
-
 	} else {
 		request.Reminder.Target = T("me")
 
@@ -72,13 +68,12 @@ func (p *Plugin) ParseRequest(request *ReminderRequest) error {
 		lastIndex := strings.LastIndex(request.Payload, "\"")
 
 		if firstIndex > -1 && lastIndex > -1 && firstIndex != lastIndex { // has quotes
-
 			message := request.Payload[firstIndex : lastIndex+1]
 
-			when := strings.Replace(request.Payload, message, "", -1)
+			when := strings.ReplaceAll(request.Payload, message, "")
 			when = strings.Trim(when, " ")
 
-			message = strings.Replace(message, "\"", "", -1)
+			message = strings.ReplaceAll(message, "\"", "")
 
 			request.Reminder.When = when
 			request.Reminder.Message = message
@@ -94,7 +89,7 @@ func (p *Plugin) ParseRequest(request *ReminderRequest) error {
 			request.Reminder.When = request.Reminder.When[0:toIndex]
 		}
 
-		message := strings.Replace(request.Payload, request.Reminder.When, "", -1)
+		message := strings.ReplaceAll(request.Payload, request.Reminder.When, "")
 		message = strings.Trim(message, " \"")
 
 		if message == "" {
@@ -103,13 +98,10 @@ func (p *Plugin) ParseRequest(request *ReminderRequest) error {
 		request.Reminder.Message = message
 
 		return nil
-
 	}
-
 }
 
 func (p *Plugin) findWhen(request *ReminderRequest) error {
-
 	user, uErr := p.API.GetUserByUsername(request.Username)
 	if uErr != nil {
 		return uErr
@@ -122,11 +114,9 @@ func (p *Plugin) findWhen(request *ReminderRequest) error {
 	default:
 		return p.findWhenEN(request)
 	}
-
 }
 
 func (p *Plugin) findWhenEN(request *ReminderRequest) error {
-
 	user, uErr := p.API.GetUserByUsername(request.Username)
 	if uErr != nil {
 		return uErr
@@ -242,7 +232,6 @@ func (p *Plugin) findWhenEN(request *ReminderRequest) error {
 		request.Reminder.When = lastWord
 		return nil
 	} else {
-
 		lastWord = textSplit[len(textSplit)-1]
 
 		switch lastWord {
@@ -305,15 +294,12 @@ func (p *Plugin) findWhenEN(request *ReminderRequest) error {
 				break
 			}
 		}
-
 	}
 
 	return errors.New("unable to find when")
-
 }
 
 func (p *Plugin) normalizeTime(text string, user *model.User) (string, error) {
-
 	T, _ := p.translation(user)
 	location := p.location(user)
 
@@ -394,8 +380,7 @@ func (p *Plugin) normalizeTime(text string, user *model.User) (string, error) {
 
 	t := text
 	if match, _ := regexp.MatchString("(1[012]|[1-9]):[0-5][0-9](\\s)?(?i)(am|pm)", t); match { // 12:30PM, 12:30 pm
-
-		t = strings.ToUpper(strings.Replace(t, " ", "", -1))
+		t = strings.ToUpper(strings.ReplaceAll(t, " ", ""))
 		test, tErr := time.Parse(time.Kitchen, t)
 		if tErr != nil {
 			return "", tErr
@@ -415,9 +400,8 @@ func (p *Plugin) normalizeTime(text string, user *model.User) (string, error) {
 
 		return dateTimeSplit[1], nil
 	} else if match, _ := regexp.MatchString("(1[012]|[1-9]):[0-5][0-9]", t); match { // 12:30
-
 		nowkit := time.Now().In(location).Format(time.Kitchen)
-		ampm := string(nowkit[len(nowkit)-2:])
+		ampm := nowkit[len(nowkit)-2:]
 		timeUnitSplit := strings.Split(t, ":")
 		hr, _ := strconv.Atoi(timeUnitSplit[0])
 
@@ -449,11 +433,9 @@ func (p *Plugin) normalizeTime(text string, user *model.User) (string, error) {
 		}
 
 		return dateTimeSplit[1], nil
-
 	} else if match, _ := regexp.MatchString("(1[012]|[1-9])(\\s)?(?i)(am|pm)", t); match { // 5PM, 7 am
-
 		nowkit := time.Now().In(location).Format(time.Kitchen)
-		ampm := string(nowkit[len(nowkit)-2:])
+		ampm := nowkit[len(nowkit)-2:]
 
 		if strings.HasSuffix(t, "pm") {
 			ampm = "PM"
@@ -482,16 +464,13 @@ func (p *Plugin) normalizeTime(text string, user *model.User) (string, error) {
 
 		return dateTimeSplit[1], nil
 	} else if match, _ := regexp.MatchString("(1[012]|[1-9])[0-5][0-9]", t); match { // 1200
-
 		return t[:len(t)-2] + ":" + t[len(t)-2:] + ":00", nil
-
 	}
 
 	return "", errors.New("unable to normalize time")
 }
 
 func (p *Plugin) normalizeDate(text string, user *model.User) (string, error) {
-
 	location := p.location(user)
 	T, _ := p.translation(user)
 
@@ -561,8 +540,7 @@ func (p *Plugin) normalizeDate(text string, user *model.User) (string, error) {
 		strings.Contains(date, T("november")) ||
 		strings.Contains(date, T("dec")) ||
 		strings.Contains(date, T("december")) {
-
-		date = strings.Replace(date, ",", "", -1)
+		date = strings.ReplaceAll(date, ",", "")
 		parts := strings.Split(date, " ")
 
 		switch len(parts) {
@@ -634,9 +612,7 @@ func (p *Plugin) normalizeDate(text string, user *model.User) (string, error) {
 			parts[1] = "0" + parts[1]
 		}
 		return parts[2] + "-" + parts[0] + "-" + parts[1] + "T00:00:00Z", nil
-
 	} else if match, _ := regexp.MatchString("^([0-9]{4}-[0-9]{2}-[0-9]{2})", date); match {
-
 		date := p.regSplit(date, "-")
 
 		switch len(date) {
@@ -659,9 +635,7 @@ func (p *Plugin) normalizeDate(text string, user *model.User) (string, error) {
 		default:
 			return "", errors.New("unrecognized date")
 		}
-
 	} else if match, _ := regexp.MatchString("^(([0-9]{2}|[0-9]{1})(-|/)([0-9]{2}|[0-9]{1})((-|/)([0-9]{4}|[0-9]{2}))?)", date); match {
-
 		date := p.regSplit(date, "-|/")
 
 		switch len(date) {
@@ -700,9 +674,7 @@ func (p *Plugin) normalizeDate(text string, user *model.User) (string, error) {
 		default:
 			return "", errors.New("unrecognized date")
 		}
-
 	} else if match, _ := regexp.MatchString("^(([0-9]{2}|[0-9]{1})(.)([0-9]{2}|[0-9]{1})((.)([0-9]{4}|[0-9]{2}))?)", date); match {
-
 		date := p.regSplit(date, "\\.")
 
 		switch len(date) {
@@ -741,9 +713,7 @@ func (p *Plugin) normalizeDate(text string, user *model.User) (string, error) {
 		default:
 			return "", errors.New("unrecognized date")
 		}
-
-	} else { //single number day
-
+	} else { // single number day
 		var dayInt int
 		day := p.daySuffix(user, date)
 
@@ -766,13 +736,10 @@ func (p *Plugin) normalizeDate(text string, user *model.User) (string, error) {
 		}
 
 		return t.Format(time.RFC3339), nil
-
 	}
-
 }
 
 func (p *Plugin) daySuffixFromInt(user *model.User, day int) string {
-
 	T, _ := p.translation(user)
 
 	daySuffixes := []string{
@@ -810,11 +777,9 @@ func (p *Plugin) daySuffixFromInt(user *model.User, day int) string {
 		T("31st"),
 	}
 	return daySuffixes[day]
-
 }
 
 func (p *Plugin) daySuffix(user *model.User, day string) string {
-
 	T, _ := p.translation(user)
 
 	daySuffixes := []string{
@@ -861,7 +826,6 @@ func (p *Plugin) daySuffix(user *model.User, day string) string {
 }
 
 func (p *Plugin) monthNumber(month string, user *model.User) (string, error) {
-
 	T, _ := p.translation(user)
 
 	switch month {
@@ -904,7 +868,6 @@ func (p *Plugin) monthNumber(month string, user *model.User) (string, error) {
 }
 
 func (p *Plugin) weekDayNumber(day string, user *model.User) int {
-
 	T, _ := p.translation(user)
 
 	switch day {
@@ -928,7 +891,6 @@ func (p *Plugin) weekDayNumber(day string, user *model.User) int {
 }
 
 func (p *Plugin) regSplit(text string, delimeter string) []string {
-
 	reg := regexp.MustCompile(delimeter)
 	indexes := reg.FindAllStringIndex(text, -1)
 	laststart := 0
@@ -942,7 +904,6 @@ func (p *Plugin) regSplit(text string, delimeter string) []string {
 }
 
 func (p *Plugin) wordToNumber(word string, user *model.User) (int, error) {
-
 	T, _ := p.translation(user)
 
 	var sum int
@@ -996,7 +957,7 @@ func (p *Plugin) wordToNumber(word string, user *model.User) (int, error) {
 	numbers[T("sixth")] = 6
 	numbers[T("seventh")] = 7
 	numbers[T("eighth")] = 8
-	numbers[T("nineth")] = 9
+	numbers[T("nineth")] = 9 //nolint:misspell // translation id, renamed with assets/i18n/en.json
 	numbers[T("tenth")] = 10
 	numbers[T("eleventh")] = 11
 	numbers[T("twelveth")] = 12
@@ -1026,17 +987,17 @@ func (p *Plugin) wordToNumber(word string, user *model.User) (int, error) {
 	for _, split := range splitted {
 		if numbers[split] != 0 {
 			temp = numbers[split]
-			sum = sum + temp
-			previous = previous + temp
+			sum += temp
+			previous += temp
 		} else if onumbers[split] != 0 {
 			if sum != 0 {
-				sum = sum - previous
+				sum -= previous
 			}
-			sum = sum + previous*onumbers[split]
+			sum += previous * onumbers[split]
 			previous = 0
 		} else if tnumbers[split] != 0 {
 			temp = tnumbers[split]
-			sum = sum + temp
+			sum += temp
 		}
 	}
 
