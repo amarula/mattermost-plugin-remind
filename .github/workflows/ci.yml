@@ -34,6 +34,11 @@ jobs:
       - name: Test
         run: go test -race -coverprofile=coverage.txt ./...
 
+      - name: Vulnerability scan
+        # Reports only vulnerabilities the plugin can actually reach, which is
+        # more useful than the version based alerts Dependabot raises.
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
+
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v7
         with:
