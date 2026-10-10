@@ -39,7 +39,7 @@ linters:
       # stored as zero values; it needs json tags and a migration for what is
       # there, which is its own change. storage_format_test.go pins the format.
       - path: server/(reminder|occurrence)\.go
-        text: 'var-naming: (struct field|var) (Id|TeamId|ReminderId|botUserId) should be'
+        text: 'var-naming: (struct field|var) (Id|TeamId|ReminderId) should be'
         linters:
           - revive
       - path: _test\.go
@@ -52,13 +52,6 @@ linters:
         text: 'unusedwrite:'
         linters:
           - govet
-      # The starter template's build tooling reads the bundle path and the
-      # server URL it is given and logs them, which is what the gosec taint
-      # rules flag. It is a development CLI, not part of the shipped plugin.
-      - path: ^build/
-        text: '^(G30[46]|G70[0-9]):'
-        linters:
-          - gosec
       # govet's fieldalignment wants struct fields ordered to shave pointer
       # bytes. The structs it names are read by people and, for Reminder and
       # Occurrence, are the stored format's field order; neither is worth
