@@ -54,70 +54,88 @@ func (p *Plugin) ServeHTTP(_ *plugin.Context, w http.ResponseWriter, r *http.Req
 	p.router.ServeHTTP(w, r)
 }
 
-func (p *Plugin) handleDialog(_ http.ResponseWriter, req *http.Request) {
-	body, _ := io.ReadAll(req.Body)
+func (p *Plugin) handleDialog(w http.ResponseWriter, req *http.Request) {
+	body, readErr := io.ReadAll(req.Body)
 	defer func() { _ = req.Body.Close() }()
+	if readErr != nil {
+		http.Error(w, "could not read the submission", http.StatusBadRequest)
+		return
+	}
 
 	var request *model.SubmitDialogRequest
-	_ = json.Unmarshal(body, &request)
+	if decodeErr := json.Unmarshal(body, &request); decodeErr != nil || request == nil {
+		http.Error(w, "could not read the submission", http.StatusBadRequest)
+		return
+	}
 
 	user, uErr := p.API.GetUser(request.UserId)
 	if uErr != nil {
 		p.API.LogError(uErr.Error())
+		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 
 	T, _ := p.translation(user)
 	location := p.location(user)
 
-	message := request.Submission["message"]
-	target := request.Submission["target"]
-	ttime := request.Submission["time"]
+	message := strings.TrimSpace(submissionString(request.Submission, dialogElementMessage))
+	repeat := dialogRepeat(submissionString(request.Submission, dialogElementRepeat))
+	whenValue := submissionString(request.Submission, dialogElementWhen)
+	target := p.dialogTarget(user, submissionString(request.Submission, dialogElementTarget))
 
-	if target == nil {
-		target = T("me")
-	}
-	if target != T("me") &&
-		!strings.HasPrefix(target.(string), "@") &&
-		!strings.HasPrefix(target.(string), "~") {
-		target = "@" + target.(string)
+	// What cannot be acted on is answered on the field it belongs to, which is
+	// what keeps the dialog open with what was typed still in it. Failures used
+	// to be swallowed into the log, and the dialog simply closed.
+	fieldErrors := map[string]string{}
+	if message == "" {
+		fieldErrors[dialogElementMessage] = T("schedule.error.message")
 	}
 
-	var when string
-	if ttime.(string) == "unit.test" {
-		when = "in 20 minutes"
-	} else {
-		when = T("in") + " " + T("button.snooze."+ttime.(string))
-		switch ttime.(string) {
-		case "tomorrow":
-			when = T("tomorrow")
-		case "nextweek":
-			when = T("monday")
-		}
+	picked, whenErr := parseDialogDateTime(whenValue, location)
+	switch {
+	case whenValue == "":
+		fieldErrors[dialogElementWhen] = T("schedule.error.when")
+	case whenErr != nil:
+		fieldErrors[dialogElementWhen] = T("schedule.error.when.format")
+	case repeat == repeatOnce && !picked.After(time.Now()):
+		fieldErrors[dialogElementWhen] = T("schedule.error.when.past")
+	}
+
+	// The engine refuses a repeating reminder aimed at another user; it is
+	// refused here first, where the user can see why.
+	if repeat != repeatOnce && strings.HasPrefix(target, "@") && target != T("me") {
+		fieldErrors[dialogElementTarget] = T("schedule.error.target")
+	}
+
+	if len(fieldErrors) > 0 {
+		writeSubmitDialogResponse(w, &model.SubmitDialogResponse{Errors: fieldErrors})
+		return
 	}
 
 	r := &ReminderRequest{
 		TeamId:   request.TeamId,
 		Username: user.Username,
-		Payload:  message.(string),
+		Payload:  message,
 		Reminder: Reminder{
 			Id:        model.NewId(),
 			TeamId:    request.TeamId,
 			Username:  user.Username,
-			Message:   message.(string),
+			Message:   message,
 			Completed: p.emptyTime,
-			Target:    target.(string),
-			When:      when,
+			Target:    target,
+			When:      p.composeWhen(user, picked, repeat),
 		},
 	}
 
 	if cErr := p.CreateOccurrences(r); cErr != nil {
 		p.API.LogError(cErr.Error())
+		writeSubmitDialogResponse(w, &model.SubmitDialogResponse{Error: T("exception.response")})
 		return
 	}
 
 	if rErr := p.UpsertReminder(r); rErr != nil {
 		p.API.LogError(rErr.Error())
+		writeSubmitDialogResponse(w, &model.SubmitDialogResponse{Error: T("exception.response")})
 		return
 	}
 
@@ -187,6 +205,8 @@ func (p *Plugin) handleDialog(_ http.ResponseWriter, req *http.Request) {
 		},
 	}
 	p.API.SendEphemeralPost(user.Id, reminder)
+
+	writeSubmitDialogResponse(w, &model.SubmitDialogResponse{})
 }
 
 func (p *Plugin) handleViewEphemeral(w http.ResponseWriter, r *http.Request) {
@@ -704,6 +724,17 @@ func (p *Plugin) handleCloseList(w http.ResponseWriter, r *http.Request) {
 	_ = json.Unmarshal(body, &request)
 	p.API.DeleteEphemeralPost(request.UserId, request.PostId)
 	writePostActionIntegrationResponseOk(w, &model.PostActionIntegrationResponse{})
+}
+
+// writeSubmitDialogResponse answers a dialog submission. It is always a 200,
+// including when it carries errors: the client reads the body for field errors
+// only on a successful submission, so answering with a failure status would
+// throw them away and close the dialog.
+func writeSubmitDialogResponse(w http.ResponseWriter, response *model.SubmitDialogResponse) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	responseJSON, _ := json.Marshal(response)
+	_, _ = w.Write(responseJSON)
 }
 
 func writePostActionIntegrationResponseOk(w http.ResponseWriter, response *model.PostActionIntegrationResponse) {

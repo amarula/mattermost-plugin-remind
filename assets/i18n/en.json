@@ -36,6 +36,70 @@
     "translation": "Schedule Reminder"
   },
   {
+    "id": "schedule.when",
+    "translation": "Time"
+  },
+  {
+    "id": "schedule.when.help",
+    "translation": "In the time zone shown by your device."
+  },
+  {
+    "id": "schedule.when.help.zone",
+    "translation": "Time zone: {{.Zone}}"
+  },
+  {
+    "id": "schedule.message.help",
+    "translation": "What to be reminded of."
+  },
+  {
+    "id": "schedule.repeat",
+    "translation": "Repeat"
+  },
+  {
+    "id": "schedule.repeat.help",
+    "translation": "A repeat starts at the next matching time, not at the one picked."
+  },
+  {
+    "id": "schedule.repeat.once",
+    "translation": "Once"
+  },
+  {
+    "id": "schedule.repeat.daily",
+    "translation": "Every day"
+  },
+  {
+    "id": "schedule.repeat.weekdays",
+    "translation": "Every weekday"
+  },
+  {
+    "id": "schedule.repeat.weekly",
+    "translation": "Every week"
+  },
+  {
+    "id": "schedule.repeat.monthly",
+    "translation": "Every month"
+  },
+  {
+    "id": "schedule.error.message",
+    "translation": "A reminder needs a message."
+  },
+  {
+    "id": "schedule.error.when",
+    "translation": "Pick a time."
+  },
+  {
+    "id": "schedule.error.when.format",
+    "translation": "That time could not be understood."
+  },
+  {
+    "id": "schedule.error.when.past",
+    "translation": "Pick a time in the future."
+  },
+  {
+    "id": "schedule.error.target",
+    "translation": "A repeating reminder can only be for you."
+  },
+  {
     "id": "list.inchannel",
     "translation": "**In this channel:**"
   },
