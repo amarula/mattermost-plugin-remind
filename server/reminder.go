@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mattermost/mattermost-server/v6/model"
+	"github.com/mattermost/mattermost/server/public/model"
 )
 
 type Reminder struct {
@@ -96,7 +96,9 @@ func (p *Plugin) TriggerRemindersForTick(tickAt time.Time) {
 			}
 			user, uErr := p.API.GetUserByUsername(occurrence.Username)
 			if uErr != nil {
-				p.API.LogError("failed to query user %s", user.Id)
+				// The user it failed to find is named by the occurrence: reading the
+				// name off the nil result would panic inside the tick.
+				p.API.LogError("failed to query user " + occurrence.Username + ": " + uErr.Error())
 				continue
 			}
 			bytes, bErr := p.API.KVGet(user.Username)
@@ -160,7 +162,7 @@ func (p *Plugin) TriggerRemindersForTick(tickAt time.Time) {
 						PendingPostId: model.NewId() + ":" + fmt.Sprint(model.GetMillis()),
 						UserId:        p.botUserId,
 						Props: model.StringInterface{
-							"attachments": []*model.SlackAttachment{
+							"attachments": []*model.MessageAttachment{
 								{
 									Text: T("reminder.message", messageParameters),
 									Actions: []*model.PostAction{
@@ -173,7 +175,7 @@ func (p *Plugin) TriggerRemindersForTick(tickAt time.Time) {
 													"occurrence_id": occurrence.Id,
 													"action":        "complete",
 												},
-												URL: fmt.Sprintf("/plugins/%s/complete", manifest.ID),
+												URL: fmt.Sprintf("/plugins/%s/complete", PluginID),
 											},
 											Type: model.PostActionTypeButton,
 											Name: T("button.complete"),
@@ -186,7 +188,7 @@ func (p *Plugin) TriggerRemindersForTick(tickAt time.Time) {
 													"occurrence_id": occurrence.Id,
 													"action":        "delete",
 												},
-												URL: fmt.Sprintf("/plugins/%s/delete", manifest.ID),
+												URL: fmt.Sprintf("/plugins/%s/delete", PluginID),
 											},
 											Name: T("button.delete"),
 											Type: "action",
@@ -199,7 +201,7 @@ func (p *Plugin) TriggerRemindersForTick(tickAt time.Time) {
 													"occurrence_id": occurrence.Id,
 													"action":        "snooze",
 												},
-												URL: fmt.Sprintf("/plugins/%s/snooze", manifest.ID),
+												URL: fmt.Sprintf("/plugins/%s/snooze", PluginID),
 											},
 											Name: T("button.snooze"),
 											Type: "select",
@@ -239,7 +241,7 @@ func (p *Plugin) TriggerRemindersForTick(tickAt time.Time) {
 						PendingPostId: model.NewId() + ":" + fmt.Sprint(model.GetMillis()),
 						UserId:        p.botUserId,
 						Props: model.StringInterface{
-							"attachments": []*model.SlackAttachment{
+							"attachments": []*model.MessageAttachment{
 								{
 									Text: T("reminder.message", messageParameters),
 									Actions: []*model.PostAction{
@@ -250,7 +252,7 @@ func (p *Plugin) TriggerRemindersForTick(tickAt time.Time) {
 													"occurrence_id": occurrence.Id,
 													"action":        "snooze",
 												},
-												URL: fmt.Sprintf("/plugins/%s/snooze", manifest.ID),
+												URL: fmt.Sprintf("/plugins/%s/snooze", PluginID),
 											},
 											Name: T("button.snooze"),
 											Type: "select",
@@ -522,7 +524,7 @@ func (p *Plugin) DeleteReminders(user *model.User) string {
 	var reminders []Reminder
 	if err := json.Unmarshal(bytes, &reminders); err != nil {
 		p.API.LogError("failed json unmarshal %s", bErr)
-		return T("exception.reponse")
+		return T("exception.response")
 	}
 
 	for _, r := range reminders {
@@ -547,7 +549,11 @@ func (p *Plugin) rescheduleOccurrence(occurrence *Occurrence) {
 
 	time.Sleep(1000 * time.Millisecond)
 
-	user, _ := p.API.GetUserByUsername(occurrence.Username)
+	user, uErr := p.API.GetUserByUsername(occurrence.Username)
+	if uErr != nil {
+		p.API.LogError("failed to look up " + occurrence.Username + " to reschedule a reminder: " + uErr.Error())
+		return
+	}
 	_, locale := p.translation(user)
 
 	var times []time.Time
@@ -557,6 +563,13 @@ func (p *Plugin) rescheduleOccurrence(occurrence *Occurrence) {
 		times, _ = p.rescheduleOccurrenceEN(occurrence)
 	default:
 		times, _ = p.rescheduleOccurrenceEN(occurrence)
+	}
+
+	// A repeat that no longer resolves to a next time leaves the occurrence as it
+	// is rather than indexing an empty slice.
+	if len(times) == 0 {
+		p.API.LogError("no next time for a recurring reminder of " + occurrence.Username)
+		return
 	}
 
 	if len(times) > 1 {
@@ -593,16 +606,19 @@ func (p *Plugin) rescheduleOccurrence(occurrence *Occurrence) {
 		}
 	}
 	reminder.Occurrences = updatedOccurrences
-	uErr := p.UpdateReminder(user.Id, reminder)
-	if uErr != nil {
-		p.API.LogError("failed to update reminder %s", uErr)
+	upErr := p.UpdateReminder(user.Id, reminder)
+	if upErr != nil {
+		p.API.LogError("failed to update reminder %s", upErr)
 	}
 
 }
 
 func (p *Plugin) rescheduleOccurrenceEN(occurrence *Occurrence) ([]time.Time, error) {
 
-	user, _ := p.API.GetUserByUsername(occurrence.Username)
+	user, uErr := p.API.GetUserByUsername(occurrence.Username)
+	if uErr != nil {
+		return nil, uErr
+	}
 	T, _ := p.translation(user)
 
 	if strings.HasPrefix(occurrence.Repeat, T("in")) {

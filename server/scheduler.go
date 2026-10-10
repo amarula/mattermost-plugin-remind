@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mattermost/mattermost-server/v6/model"
+	"github.com/mattermost/mattermost/server/public/model"
 )
 
 func (p *Plugin) ScheduleReminder(request *ReminderRequest, channelId string) (*model.Post, error) {
@@ -70,7 +70,7 @@ func (p *Plugin) ScheduleReminder(request *ReminderRequest, channelId string) (*
 		ChannelId: channelId,
 		UserId:    p.botUserId,
 		Props: model.StringInterface{
-			"attachments": []*model.SlackAttachment{
+			"attachments": []*model.MessageAttachment{
 				{
 					Text: T("schedule.response", responseParameters),
 					Actions: []*model.PostAction{
@@ -82,7 +82,7 @@ func (p *Plugin) ScheduleReminder(request *ReminderRequest, channelId string) (*
 									"occurrence_id": request.Reminder.Occurrences[0].Id,
 									"action":        "delete/ephemeral",
 								},
-								URL: fmt.Sprintf("/plugins/%s/delete/ephemeral", manifest.ID),
+								URL: fmt.Sprintf("/plugins/%s/delete/ephemeral", PluginID),
 							},
 							Type: model.PostActionTypeButton,
 							Name: T("button.delete"),
@@ -95,7 +95,7 @@ func (p *Plugin) ScheduleReminder(request *ReminderRequest, channelId string) (*
 									"occurrence_id": request.Reminder.Occurrences[0].Id,
 									"action":        "view/ephemeral",
 								},
-								URL: fmt.Sprintf("/plugins/%s/view/ephemeral", manifest.ID),
+								URL: fmt.Sprintf("/plugins/%s/view/ephemeral", PluginID),
 							},
 							Type: model.PostActionTypeButton,
 							Name: T("button.view.reminders"),
@@ -114,7 +114,7 @@ func (p *Plugin) InteractiveSchedule(triggerId string, user *model.User) {
 
 	dialogRequest := model.OpenDialogRequest{
 		TriggerId: triggerId,
-		URL:       fmt.Sprintf("/plugins/%s/dialog", manifest.ID),
+		URL:       fmt.Sprintf("/plugins/%s/dialog", PluginID),
 		Dialog: model.Dialog{
 			Title:       T("schedule.reminder"),
 			CallbackId:  model.NewId(),
@@ -301,23 +301,40 @@ func (p *Plugin) InteractiveSchedule(triggerId string, user *model.User) {
 
 func (p *Plugin) Run() {
 	p.Stop()
-	if !p.running {
-		p.running = true
-		p.runner()
+	if !p.running.Load() {
+		p.running.Store(true)
+		p.runner(p.generation.Add(1))
 	}
 }
 
 func (p *Plugin) Stop() {
-	p.running = false
+	p.running.Store(false)
+	// Bumping the generation retires the tick that is already in flight: without
+	// it, a tick scheduled before this Stop would see running set to true again by
+	// a later Run and start a second chain alongside the new one.
+	p.generation.Add(1)
 }
 
-func (p *Plugin) runner() {
+func (p *Plugin) runner(generation uint64) {
 	go func() {
 		<-time.NewTimer(time.Second).C
-		if !p.running {
+		if !p.running.Load() || p.generation.Load() != generation {
 			return
 		}
-		p.TriggerReminders()
-		p.runner()
+		p.triggerRemindersSafely()
+		p.runner(generation)
 	}()
+}
+
+// triggerRemindersSafely runs one tick. A panic in a tick used to kill the plugin
+// process while the server kept proxying requests to it, so a failed tick is
+// contained instead: the next one runs a second later.
+func (p *Plugin) triggerRemindersSafely() {
+	defer func() {
+		if r := recover(); r != nil {
+			p.API.LogError(fmt.Sprintf("Recovered from panic in the reminder tick: %v", r))
+		}
+	}()
+
+	p.TriggerReminders()
 }

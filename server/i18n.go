@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/mattermost/mattermost-server/v6/model"
-	"github.com/nicksnyder/go-i18n/i18n"
+	"github.com/mattermost/go-i18n/i18n"
+	"github.com/mattermost/mattermost/server/public/model"
 	"github.com/pkg/errors"
 )
 

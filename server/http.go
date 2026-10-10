@@ -10,8 +10,8 @@ import (
 
 	"github.com/gorilla/mux"
 
-	"github.com/mattermost/mattermost-server/v6/model"
-	"github.com/mattermost/mattermost-server/v6/plugin"
+	"github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/public/plugin"
 )
 
 func (p *Plugin) InitAPI() *mux.Router {
@@ -40,6 +40,17 @@ func (p *Plugin) InitAPI() *mux.Router {
 }
 
 func (p *Plugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r *http.Request) {
+	// These endpoints are reachable by any signed-in user, and the handlers read
+	// their input with unchecked type assertions on the request body. A panic
+	// there used to kill the plugin process, taking every other user's reminders
+	// with it, so a failing request answers with an error instead.
+	defer func() {
+		if rec := recover(); rec != nil {
+			p.API.LogError(fmt.Sprintf("Recovered from panic serving %s: %v", r.URL.Path, rec))
+			http.Error(w, "internal error", http.StatusInternalServerError)
+		}
+	}()
+
 	p.router.ServeHTTP(w, r)
 }
 
@@ -143,7 +154,7 @@ func (p *Plugin) handleDialog(w http.ResponseWriter, req *http.Request) {
 		ChannelId: request.ChannelId,
 		UserId:    p.botUserId,
 		Props: model.StringInterface{
-			"attachments": []*model.SlackAttachment{
+			"attachments": []*model.MessageAttachment{
 				{
 					Text: T("schedule.response", responseParameters),
 					Actions: []*model.PostAction{
@@ -154,7 +165,7 @@ func (p *Plugin) handleDialog(w http.ResponseWriter, req *http.Request) {
 									"occurrence_id": r.Reminder.Occurrences[0].Id,
 									"action":        "delete/ephemeral",
 								},
-								URL: fmt.Sprintf("/plugins/%s/delete/ephemeral", manifest.ID),
+								URL: fmt.Sprintf("/plugins/%s/delete/ephemeral", PluginID),
 							},
 							Type: model.PostActionTypeButton,
 							Name: T("button.delete"),
@@ -166,7 +177,7 @@ func (p *Plugin) handleDialog(w http.ResponseWriter, req *http.Request) {
 									"occurrence_id": r.Reminder.Occurrences[0].Id,
 									"action":        "view/ephemeral",
 								},
-								URL: fmt.Sprintf("/plugins/%s/view/ephemeral", manifest.ID),
+								URL: fmt.Sprintf("/plugins/%s/view/ephemeral", PluginID),
 							},
 							Type: model.PostActionTypeButton,
 							Name: T("button.view.reminders"),

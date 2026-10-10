@@ -2,11 +2,11 @@
     "id": "com.github.scottleedavis.mattermost-plugin-remind",
     "name": "Remind",
     "description": "Sets Reminders for users and channels via a Trigger word",
-    "homepage_url": "https://github.com/scottleedavis/mattermost-plugin-remind",
-    "support_url": "https://github.com/scottleedavis/mattermost-plugin-remind/issues",
-    "release_notes_url": "https://github.com/scottleedavis/mattermost-plugin-remind/releases/tag/v1.0.0",
-    "version": "1.0.0",
-    "min_server_version": "6.3.0",
+    "homepage_url": "https://github.com/amarula/mattermost-plugin-remind",
+    "support_url": "https://github.com/amarula/mattermost-plugin-remind/issues",
+    "release_notes_url": "https://github.com/amarula/mattermost-plugin-remind/releases/tag/v2.0.0",
+    "version": "2.0.0",
+    "min_server_version": "11.0.0",
     "server": {
         "executables": {
             "linux-amd64": "server/dist/plugin-linux-amd64",
@@ -25,6 +25,6 @@
                 "default": "remind"
             }
         ],
-        "footer": "* To report an issue, make a suggestion, or submit a contribution, [check the repository](https://github.com/scottleedavis/mattermost-plugin-remind/)."
+        "footer": "* To report an issue, make a suggestion, or submit a contribution, [check the repository](https://github.com/amarula/mattermost-plugin-remind/)."
     }
 }

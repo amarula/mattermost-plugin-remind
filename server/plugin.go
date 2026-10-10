@@ -2,19 +2,33 @@ package main
 
 import (
 	"os"
+	"sync/atomic"
 	"time"
 
+	// Embed the timezone database so resolving a user's time zone does not depend
+	// on the host shipping /usr/share/zoneinfo.
+	_ "time/tzdata"
+
 	"github.com/gorilla/mux"
-	pluginapi "github.com/mattermost/mattermost-plugin-api"
-	"github.com/mattermost/mattermost-server/v6/model"
-	"github.com/mattermost/mattermost-server/v6/plugin"
+	"github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/public/plugin"
+	"github.com/mattermost/mattermost/server/public/pluginapi"
 	"github.com/pkg/errors"
 )
 
 const (
 	botUserName    = "remindbot"
 	botDisplayName = "Remindbot"
+
+	// PluginID is the id the plugin is installed under, as plugin.json declares it.
+	// It goes into every action URL the plugin hands to the web app.
+	PluginID = "com.github.scottleedavis.mattermost-plugin-remind"
 )
+
+// PluginVersion is the version reported to users, injected at build time as
+// "vX.Y.Z" by the build. A build that skips those ldflags says "dev" rather than
+// reporting a version it does not have.
+var PluginVersion = "dev"
 
 type Plugin struct {
 	plugin.MattermostPlugin
@@ -22,8 +36,12 @@ type Plugin struct {
 
 	router    *mux.Router
 	botUserId string
-	running   bool
 	emptyTime time.Time
+
+	// running and generation are touched by the reminder tick goroutine as well as
+	// by the plugin hooks, so they are atomic.
+	running    atomic.Bool
+	generation atomic.Uint64
 
 	ServerConfig *model.Config
 

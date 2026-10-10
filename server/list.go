@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mattermost/mattermost-server/v6/model"
+	"github.com/mattermost/mattermost/server/public/model"
 )
 
 const RemindersPerPage = 4
@@ -185,7 +185,7 @@ func (p *Plugin) pagedOccurrences(
 	pastOccurrences []Occurrence,
 	channelOccurrences []Occurrence,
 	offset int,
-	endOffset int) (attachments []*model.SlackAttachment) {
+	endOffset int) (attachments []*model.MessageAttachment) {
 
 	offsetCount := 0
 
@@ -234,7 +234,7 @@ func (p *Plugin) listControl(
 	completedReminderCount int,
 	offset int,
 	endOffset int,
-	attachments []*model.SlackAttachment) []*model.SlackAttachment {
+	attachments []*model.MessageAttachment) []*model.MessageAttachment {
 
 	T, _ := p.translation(user)
 
@@ -267,7 +267,7 @@ func (p *Plugin) listControl(
 							"action": "next/reminders",
 							"offset": endOffset + 1,
 						},
-						URL: fmt.Sprintf("/plugins/%s/next/reminders", manifest.ID),
+						URL: fmt.Sprintf("/plugins/%s/next/reminders", PluginID),
 					},
 					Type: model.PostActionTypeButton,
 					Name: T("button.next.reminders", reminderCount),
@@ -282,7 +282,7 @@ func (p *Plugin) listControl(
 							"action": "previous/reminders",
 							"offset": offset - RemindersPerPage,
 						},
-						URL: fmt.Sprintf("/plugins/%s/next/reminders", manifest.ID),
+						URL: fmt.Sprintf("/plugins/%s/next/reminders", PluginID),
 					},
 					Type: model.PostActionTypeButton,
 					Name: T("button.previous.reminders", reminderCount),
@@ -297,7 +297,7 @@ func (p *Plugin) listControl(
 							"action": "previous/reminders",
 							"offset": offset - RemindersPerPage,
 						},
-						URL: fmt.Sprintf("/plugins/%s/next/reminders", manifest.ID),
+						URL: fmt.Sprintf("/plugins/%s/next/reminders", PluginID),
 					},
 					Type: model.PostActionTypeButton,
 					Name: T("button.previous.reminders", reminderCount),
@@ -309,7 +309,7 @@ func (p *Plugin) listControl(
 							"action": "next/reminders",
 							"offset": endOffset + 1,
 						},
-						URL: fmt.Sprintf("/plugins/%s/next/reminders", manifest.ID),
+						URL: fmt.Sprintf("/plugins/%s/next/reminders", PluginID),
 					},
 					Type: model.PostActionTypeButton,
 					Name: T("button.next.reminders", reminderCount),
@@ -327,7 +327,7 @@ func (p *Plugin) listControl(
 					Context: model.StringInterface{
 						"action": "view/complete/list",
 					},
-					URL: fmt.Sprintf("/plugins/%s/view/complete/list", manifest.ID),
+					URL: fmt.Sprintf("/plugins/%s/view/complete/list", PluginID),
 				},
 				Type: model.PostActionTypeButton,
 				Name: T("button.view.complete"),
@@ -340,7 +340,7 @@ func (p *Plugin) listControl(
 						"action": "delete/complete/list",
 						"offset": offset,
 					},
-					URL: fmt.Sprintf("/plugins/%s/delete/complete/list", manifest.ID),
+					URL: fmt.Sprintf("/plugins/%s/delete/complete/list", PluginID),
 				},
 				Type: model.PostActionTypeButton,
 				Name: T("button.delete.complete"),
@@ -354,19 +354,19 @@ func (p *Plugin) listControl(
 				Context: model.StringInterface{
 					"action": "close/list",
 				},
-				URL: fmt.Sprintf("/plugins/%s/close/list", manifest.ID),
+				URL: fmt.Sprintf("/plugins/%s/close/list", PluginID),
 			},
 			Name: T("button.close.list"),
 			Type: "action",
 		})
 
-	return append(attachments, &model.SlackAttachment{
+	return append(attachments, &model.MessageAttachment{
 		Text:    T("reminders.page.numbers", remindersPageCount),
 		Actions: actions,
 	})
 }
 
-func (p *Plugin) addAttachment(user *model.User, occurrence Occurrence, reminders []Reminder, gType string, offset int) *model.SlackAttachment {
+func (p *Plugin) addAttachment(user *model.User, occurrence Occurrence, reminders []Reminder, gType string, offset int) *model.MessageAttachment {
 
 	location := p.location(user)
 	T, _ := p.translation(user)
@@ -398,7 +398,7 @@ func (p *Plugin) addAttachment(user *model.User, occurrence Occurrence, reminder
 			} else {
 				output = T("list.upcoming") + " " + T("list.element.upcoming.snoozed", messageParameters)
 			}
-			return &model.SlackAttachment{
+			return &model.MessageAttachment{
 				Text: output,
 				Actions: []*model.PostAction{
 					{
@@ -409,7 +409,7 @@ func (p *Plugin) addAttachment(user *model.User, occurrence Occurrence, reminder
 								"action":        "complete/list",
 								"offset":        offset,
 							},
-							URL: fmt.Sprintf("/plugins/%s/complete/list", manifest.ID),
+							URL: fmt.Sprintf("/plugins/%s/complete/list", PluginID),
 						},
 						Type: model.PostActionTypeButton,
 						Name: T("button.complete"),
@@ -422,7 +422,7 @@ func (p *Plugin) addAttachment(user *model.User, occurrence Occurrence, reminder
 								"action":        "delete/list",
 								"offset":        offset,
 							},
-							URL: fmt.Sprintf("/plugins/%s/delete/list", manifest.ID),
+							URL: fmt.Sprintf("/plugins/%s/delete/list", PluginID),
 						},
 						Name: T("button.delete"),
 						Type: model.PostActionTypeButton,
@@ -436,7 +436,7 @@ func (p *Plugin) addAttachment(user *model.User, occurrence Occurrence, reminder
 			} else {
 				output = T("list.recurring") + " " + T("list.element.recurring.snoozed", messageParameters)
 			}
-			return &model.SlackAttachment{
+			return &model.MessageAttachment{
 				Text: output,
 				Actions: []*model.PostAction{
 					{
@@ -447,7 +447,7 @@ func (p *Plugin) addAttachment(user *model.User, occurrence Occurrence, reminder
 								"action":        "delete/list",
 								"offset":        offset,
 							},
-							URL: fmt.Sprintf("/plugins/%s/delete/list", manifest.ID),
+							URL: fmt.Sprintf("/plugins/%s/delete/list", PluginID),
 						},
 						Name: T("button.delete"),
 						Type: model.PostActionTypeButton,
@@ -461,7 +461,7 @@ func (p *Plugin) addAttachment(user *model.User, occurrence Occurrence, reminder
 			} else {
 				output = T("list.past.and.incomplete") + " " + T("list.element.past.snoozed", messageParameters)
 			}
-			return &model.SlackAttachment{
+			return &model.MessageAttachment{
 				Text: output,
 				Actions: []*model.PostAction{
 					{
@@ -472,7 +472,7 @@ func (p *Plugin) addAttachment(user *model.User, occurrence Occurrence, reminder
 								"action":        "complete/list",
 								"offset":        offset,
 							},
-							URL: fmt.Sprintf("/plugins/%s/complete/list", manifest.ID),
+							URL: fmt.Sprintf("/plugins/%s/complete/list", PluginID),
 						},
 						Type: model.PostActionTypeButton,
 						Name: T("button.complete"),
@@ -485,7 +485,7 @@ func (p *Plugin) addAttachment(user *model.User, occurrence Occurrence, reminder
 								"action":        "delete/list",
 								"offset":        offset,
 							},
-							URL: fmt.Sprintf("/plugins/%s/delete/list", manifest.ID),
+							URL: fmt.Sprintf("/plugins/%s/delete/list", PluginID),
 						},
 						Name: T("button.delete"),
 						Type: model.PostActionTypeButton,
@@ -498,7 +498,7 @@ func (p *Plugin) addAttachment(user *model.User, occurrence Occurrence, reminder
 								"action":        "snooze/list",
 								"offset":        offset,
 							},
-							URL: fmt.Sprintf("/plugins/%s/snooze/list", manifest.ID),
+							URL: fmt.Sprintf("/plugins/%s/snooze/list", PluginID),
 						},
 						Name: T("button.snooze"),
 						Type: "select",
@@ -534,7 +534,7 @@ func (p *Plugin) addAttachment(user *model.User, occurrence Occurrence, reminder
 			} else {
 				output = T("list.channel") + " " + T("list.element.channel.snoozed", messageParameters)
 			}
-			return &model.SlackAttachment{
+			return &model.MessageAttachment{
 				Text: output,
 				Actions: []*model.PostAction{
 					{
@@ -545,7 +545,7 @@ func (p *Plugin) addAttachment(user *model.User, occurrence Occurrence, reminder
 								"action":        "complete/list",
 								"offset":        offset,
 							},
-							URL: fmt.Sprintf("/plugins/%s/complete/list", manifest.ID),
+							URL: fmt.Sprintf("/plugins/%s/complete/list", PluginID),
 						},
 						Type: model.PostActionTypeButton,
 						Name: T("button.complete"),
@@ -558,7 +558,7 @@ func (p *Plugin) addAttachment(user *model.User, occurrence Occurrence, reminder
 								"action":        "delete/list",
 								"offset":        offset,
 							},
-							URL: fmt.Sprintf("/plugins/%s/delete/list", manifest.ID),
+							URL: fmt.Sprintf("/plugins/%s/delete/list", PluginID),
 						},
 						Name: T("button.delete"),
 						Type: model.PostActionTypeButton,
@@ -568,7 +568,7 @@ func (p *Plugin) addAttachment(user *model.User, occurrence Occurrence, reminder
 		}
 	}
 
-	return &model.SlackAttachment{}
+	return &model.MessageAttachment{}
 }
 
 func (p *Plugin) ListCompletedReminders(userId string, postId string, channelId string) {

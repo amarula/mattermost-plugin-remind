@@ -2,3 +2,6 @@ dist
 *.iml
 deploy.sh
 .idea
+
+# Local shell environment, holds credentials and is not part of the plugin.
+claude.sh
