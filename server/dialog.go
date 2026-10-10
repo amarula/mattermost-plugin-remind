@@ -343,10 +343,13 @@ func (p *Plugin) removeReminder(user *model.User, reminder Reminder) {
 	}
 }
 
-// dialogNewReminderRows is how many reminders one submission can add. Empty rows
-// are ignored, and the dialog comes back with them empty again, so the number
-// only decides how many can be set up in one go.
-const dialogNewReminderRows = 3
+// dialogNewReminderRows is how many reminders one submission can add, and so how
+// many the dialog's count offers. Nothing imposes it - the API caps dialog
+// elements only on their length, not on how many there are - so it is a reading
+// choice: each row is three fields including a date and time picker, and the
+// dialog is a scroll past a handful. Empty rows are ignored and a saved dialog
+// comes back with them empty, so this only bounds how many are set up at once.
+const dialogNewReminderRows = 10
 
 // dialogRowName names one field of one row of a dialog. The suffix changes every
 // time the dialog is built, so a client that keeps the values of fields whose
