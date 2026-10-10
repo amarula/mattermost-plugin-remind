@@ -42,10 +42,13 @@ func (p *Plugin) ClearScheduledOccurrence(reminder Reminder, occurrence Occurren
 		return
 	}
 
+	// The bucket holds every reminder that fires at this second, so only this
+	// reminder's occurrences are dropped: putting the one being cleared in their
+	// place replaced the other reminders' occurrences with a copy of it.
 	var occurrencesDelta []Occurrence
 	for _, o := range occurrences {
 		if o.ReminderId != reminder.Id {
-			occurrencesDelta = append(occurrencesDelta, occurrence)
+			occurrencesDelta = append(occurrencesDelta, o)
 		}
 	}
 
@@ -76,7 +79,7 @@ func (p *Plugin) deleteSnoozedOccurrence(occurrence Occurrence) {
 	var occurrencesDelta []Occurrence
 	for _, o := range occurrences {
 		if o.Id != occurrence.Id {
-			occurrencesDelta = append(occurrencesDelta, occurrence)
+			occurrencesDelta = append(occurrencesDelta, o)
 		}
 	}
 
@@ -86,7 +89,10 @@ func (p *Plugin) deleteSnoozedOccurrence(occurrence Occurrence) {
 		return
 	}
 
-	kvErr := p.API.KVSet(fmt.Sprintf("%v", occurrence.Occurrence), ro)
+	// The bucket read above is the snoozed one; writing back to it is what
+	// removes the entry, where writing to the occurrence's own bucket both left
+	// the snooze in place and damaged a bucket this call never read.
+	kvErr := p.API.KVSet(fmt.Sprintf("%v", occurrence.Snoozed), ro)
 	if kvErr != nil {
 		p.API.LogError("failed to store occurrence %s", kvErr)
 	}
@@ -107,7 +113,7 @@ func (p *Plugin) deleteOccurrence(occurrence Occurrence) {
 	var occurrencesDelta []Occurrence
 	for _, o := range occurrences {
 		if o.Id != occurrence.Id {
-			occurrencesDelta = append(occurrencesDelta, occurrence)
+			occurrencesDelta = append(occurrencesDelta, o)
 		}
 	}
 

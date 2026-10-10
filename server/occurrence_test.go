@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -10,9 +11,155 @@ import (
 	"github.com/mattermost/mattermost/server/public/plugin/plugintest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 )
 
-func TestClearScheduledOccurrence(_ *testing.T) {
+// occurrenceIDs is what a bucket payload holds, in order, for comparing the
+// bucket a cleared reminder leaves behind.
+func occurrenceIDs(t *testing.T, payload []byte) []string {
+	t.Helper()
+
+	var occurrences []Occurrence
+	require.NoError(t, json.Unmarshal(payload, &occurrences))
+
+	ids := make([]string, 0, len(occurrences))
+	for _, o := range occurrences {
+		ids = append(ids, o.Id)
+	}
+
+	return ids
+}
+
+func mustMarshal(t *testing.T, occurrences []Occurrence) []byte {
+	t.Helper()
+
+	payload, err := json.Marshal(occurrences)
+	require.NoError(t, err)
+
+	return payload
+}
+
+func TestClearScheduledOccurrence(t *testing.T) {
+	fireAt := time.Now().UTC().Round(time.Second)
+	bucketKey := fmt.Sprintf("%v", fireAt)
+
+	reminder := Reminder{Id: model.NewId()}
+	cleared := Occurrence{Id: model.NewId(), ReminderId: reminder.Id, Occurrence: fireAt}
+	alsoCleared := Occurrence{Id: model.NewId(), ReminderId: reminder.Id, Occurrence: fireAt}
+	anotherReminder := Occurrence{Id: model.NewId(), ReminderId: model.NewId(), Occurrence: fireAt}
+
+	// The bucket is keyed by the second a reminder fires, so every reminder that
+	// fires at that second is in it: clearing one must not touch the others.
+	t.Run("it keeps the occurrences of the reminders it is not clearing", func(t *testing.T) {
+		api := &plugintest.API{}
+		api.On("KVGet", bucketKey).Return(mustMarshal(t, []Occurrence{anotherReminder, cleared, alsoCleared}), nil)
+
+		var written []byte
+		api.On("KVSet", bucketKey, mock.Anything).Run(func(args mock.Arguments) {
+			written = args.Get(1).([]byte)
+		}).Return(nil)
+		defer api.AssertExpectations(t)
+
+		p := &Plugin{}
+		p.API = api
+
+		p.ClearScheduledOccurrence(reminder, cleared)
+
+		require.Equal(t, []string{anotherReminder.Id}, occurrenceIDs(t, written))
+	})
+
+	t.Run("it clears every occurrence of the reminder", func(t *testing.T) {
+		api := &plugintest.API{}
+		api.On("KVGet", bucketKey).Return(mustMarshal(t, []Occurrence{anotherReminder, cleared, alsoCleared}), nil)
+		api.On("KVSet", bucketKey, mock.Anything).Return(nil)
+		defer api.AssertExpectations(t)
+
+		p := &Plugin{}
+		p.API = api
+
+		p.ClearScheduledOccurrence(reminder, cleared)
+		p.ClearScheduledOccurrence(reminder, alsoCleared)
+	})
+
+	t.Run("a bucket that cannot be read is left alone", func(t *testing.T) {
+		api := &plugintest.API{}
+		api.On("KVGet", bucketKey).Return(nil, &model.AppError{Message: "no bucket"})
+		api.On("LogError", mock.Anything, mock.Anything).Maybe()
+		defer api.AssertExpectations(t)
+
+		p := &Plugin{}
+		p.API = api
+
+		p.ClearScheduledOccurrence(reminder, cleared)
+	})
+}
+
+func TestDeleteSnoozedOccurrence(t *testing.T) {
+	snoozedAt := time.Now().UTC().Round(time.Second).Add(time.Minute * 20)
+	snoozedKey := fmt.Sprintf("%v", snoozedAt)
+
+	occurrence := Occurrence{
+		Id:         model.NewId(),
+		ReminderId: model.NewId(),
+		Occurrence: time.Now().UTC().Round(time.Second),
+		Snoozed:    snoozedAt,
+	}
+	anotherReminder := Occurrence{
+		Id:         model.NewId(),
+		ReminderId: model.NewId(),
+		Occurrence: snoozedAt,
+		Snoozed:    snoozedAt,
+	}
+
+	// This one reads the bucket the snooze was filed under, so it has to write
+	// back to that bucket: writing to the occurrence's own time left the snooze
+	// in place and damaged a bucket the call never read.
+	t.Run("it rewrites the bucket it read and keeps the other reminders", func(t *testing.T) {
+		api := &plugintest.API{}
+		api.On("KVGet", snoozedKey).Return(mustMarshal(t, []Occurrence{anotherReminder, occurrence}), nil)
+
+		var writtenKey string
+		var written []byte
+		api.On("KVSet", mock.AnythingOfType("string"), mock.Anything).Run(func(args mock.Arguments) {
+			writtenKey = args.Get(0).(string)
+			written = args.Get(1).([]byte)
+		}).Return(nil)
+		defer api.AssertExpectations(t)
+
+		p := &Plugin{}
+		p.API = api
+
+		p.deleteSnoozedOccurrence(occurrence)
+
+		require.Equal(t, snoozedKey, writtenKey)
+		require.Equal(t, []string{anotherReminder.Id}, occurrenceIDs(t, written))
+	})
+}
+
+func TestDeleteOccurrence(t *testing.T) {
+	fireAt := time.Now().UTC().Round(time.Second)
+	bucketKey := fmt.Sprintf("%v", fireAt)
+
+	occurrence := Occurrence{Id: model.NewId(), ReminderId: model.NewId(), Occurrence: fireAt}
+	anotherReminder := Occurrence{Id: model.NewId(), ReminderId: model.NewId(), Occurrence: fireAt}
+
+	t.Run("it keeps the occurrences of the reminders it is not deleting", func(t *testing.T) {
+		api := &plugintest.API{}
+		api.On("KVGet", bucketKey).Return(mustMarshal(t, []Occurrence{anotherReminder, occurrence}), nil)
+
+		var written []byte
+		api.On("KVSet", bucketKey, mock.Anything).Run(func(args mock.Arguments) {
+			written = args.Get(1).([]byte)
+		}).Return(nil)
+		defer api.AssertExpectations(t)
+
+		p := &Plugin{}
+		p.API = api
+
+		p.deleteOccurrence(occurrence)
+
+		require.Equal(t, []string{anotherReminder.Id}, occurrenceIDs(t, written))
+	})
 }
 
 func TestCreateOccurrences(t *testing.T) {
