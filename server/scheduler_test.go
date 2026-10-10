@@ -187,7 +187,10 @@ func TestInteractiveSchedule(t *testing.T) {
 			require.True(t, ok, "reminder %q is not listed", reminder.Message)
 			assert.Equal(t, "bool", element.Type)
 			assert.LessOrEqual(t, len(element.DisplayName), 24)
-			assert.LessOrEqual(t, len(element.HelpText), 150)
+			// A checkbox takes the text beside it from the placeholder; leaving
+			// it empty is a checkbox with nothing next to it.
+			assert.NotEmpty(t, element.Placeholder, "a checkbox with no label is not a list")
+			assert.LessOrEqual(t, len(element.Placeholder), 150)
 		}
 		assert.NotContains(t, elements, dialogElementRemove+done.Id, "a completed reminder is not listed")
 
@@ -200,8 +203,8 @@ func TestInteractiveSchedule(t *testing.T) {
 			assert.NotEqual(t, reminder.Message, label, "the message is the help text, not the label")
 		}
 		assert.Equal(t, "every monday at 9am", elements[dialogElementRemove+repeating.Id].DisplayName)
-		assert.Equal(t, "standup", elements[dialogElementRemove+repeating.Id].HelpText)
-		assert.Equal(t, "~town-square: deploy", elements[dialogElementRemove+lingering.Id].HelpText)
+		assert.Equal(t, "standup", elements[dialogElementRemove+repeating.Id].Placeholder)
+		assert.Equal(t, "~town-square: deploy", elements[dialogElementRemove+lingering.Id].Placeholder)
 	})
 
 	t.Run("a long label is cut to what the API accepts, on a rune boundary", func(t *testing.T) {
@@ -214,7 +217,7 @@ func TestInteractiveSchedule(t *testing.T) {
 
 		element := elementsByName(openDialog(t, user, []Reminder{long}))[dialogElementRemove+long.Id]
 
-		assert.LessOrEqual(t, len(element.HelpText), 150)
-		assert.True(t, utf8.ValidString(element.HelpText), "the cut left half a rune behind")
+		assert.LessOrEqual(t, len(element.Placeholder), 150)
+		assert.True(t, utf8.ValidString(element.Placeholder), "the cut left half a rune behind")
 	})
 }

@@ -106,7 +106,9 @@ func (p *Plugin) ScheduleReminder(request *ReminderRequest, channelID string) (*
 	}, nil
 }
 
-func (p *Plugin) InteractiveSchedule(triggerID string, user *model.User) {
+// scheduleDialog is the dialog /remind opens. It is also the one a submission is
+// answered with, so the list it shows is the one the submission just changed.
+func (p *Plugin) scheduleDialog(user *model.User) model.Dialog {
 	T, _ := p.translation(user)
 	// The zone the picker shows its times in, and the zone the phrase it
 	// composes is read in. Empty when the user has set none.
@@ -181,18 +183,23 @@ func (p *Plugin) InteractiveSchedule(triggerID string, user *model.User) {
 		},
 	)
 
+	return model.Dialog{
+		Title:      T("schedule.reminder"),
+		CallbackId: model.NewId(),
+		// One button does both: what is ticked is removed, what is filled in is
+		// added.
+		SubmitLabel: T("button.save"),
+		Elements:    elements,
+	}
+}
+
+func (p *Plugin) InteractiveSchedule(triggerID string, user *model.User) {
 	dialogRequest := model.OpenDialogRequest{
 		TriggerId: triggerID,
 		URL:       fmt.Sprintf("/plugins/%s/dialog", PluginID),
-		Dialog: model.Dialog{
-			Title:      T("schedule.reminder"),
-			CallbackId: model.NewId(),
-			// One button does both: what is ticked is removed, what is filled in
-			// is added.
-			SubmitLabel: T("button.save"),
-			Elements:    elements,
-		},
+		Dialog:    p.scheduleDialog(user),
 	}
+
 	if pErr := p.API.OpenInteractiveDialog(dialogRequest); pErr != nil {
 		p.API.LogError("Failed opening interactive dialog " + pErr.Error())
 	}

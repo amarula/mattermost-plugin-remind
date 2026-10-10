@@ -63,6 +63,24 @@ func TestHandleDialog(t *testing.T) {
 		return api, &stored, &posted
 	}
 
+	// refreshed fails unless the submission answered with a dialog, and gives
+	// the elements of the one it answered with.
+	refreshed := func(t *testing.T, response model.SubmitDialogResponse) map[string]model.DialogElement {
+		t.Helper()
+
+		require.Equal(t, string(model.SubmitDialogResponseTypeForm), response.Type,
+			"the dialog is handed back rather than closed")
+		require.NotNil(t, response.Form)
+		require.NoError(t, response.Form.IsValid())
+
+		elements := map[string]model.DialogElement{}
+		for _, element := range response.Form.Elements {
+			elements[element.Name] = element
+		}
+
+		return elements
+	}
+
 	submit := func(t *testing.T, api *plugintest.API, submission model.StringInterface) (int, model.SubmitDialogResponse) {
 		t.Helper()
 
@@ -110,7 +128,8 @@ func TestHandleDialog(t *testing.T) {
 		assert.True(t, picked.Equal((*stored)[0].Occurrences[0].Occurrence))
 		assert.Empty(t, (*stored)[0].Occurrences[0].Repeat)
 
-		assert.Len(t, *posted, 1, "the confirmation post")
+		assert.Empty(t, *posted, "the answer is the dialog, not a post")
+		require.Len(t, refreshed(t, response), 5, "the list, the four fields and nothing else")
 	})
 
 	t.Run("a wall clock is read in the user's zone", func(t *testing.T) {
@@ -249,7 +268,7 @@ func TestHandleDialog(t *testing.T) {
 
 	t.Run("ticking a reminder removes it", func(t *testing.T) {
 		existing := existingReminder(t, "standup")
-		api, stored, posted := setupAPI(t, []Reminder{existing})
+		api, stored, _ := setupAPI(t, []Reminder{existing})
 		defer api.AssertExpectations(t)
 
 		status, response := submit(t, api, model.StringInterface{
@@ -259,8 +278,8 @@ func TestHandleDialog(t *testing.T) {
 		assert.Equal(t, 200, status)
 		assert.Empty(t, response.Errors)
 		assert.Empty(t, *stored, "the reminder is gone")
-		// The reply is the list, which is where the remaining buttons live.
-		require.Len(t, *posted, 1)
+		assert.NotContains(t, refreshed(t, response), dialogElementRemove+existing.Id,
+			"and gone from the list the dialog hands back")
 	})
 
 	t.Run("a tick arrives as a bool or as the word true", func(t *testing.T) {
@@ -296,7 +315,7 @@ func TestHandleDialog(t *testing.T) {
 	})
 
 	t.Run("a reminder that is gone by the time the dialog is submitted is skipped", func(t *testing.T) {
-		api, stored, posted := setupAPI(t, nil)
+		api, stored, _ := setupAPI(t, nil)
 		defer api.AssertExpectations(t)
 
 		status, response := submit(t, api, model.StringInterface{
@@ -306,12 +325,12 @@ func TestHandleDialog(t *testing.T) {
 		assert.Equal(t, 200, status)
 		assert.Empty(t, response.Errors)
 		assert.Empty(t, *stored)
-		require.Len(t, *posted, 1, "the list still answers")
+		assert.NotEmpty(t, refreshed(t, response), "the dialog still answers")
 	})
 
 	t.Run("one submit adds one reminder and removes another", func(t *testing.T) {
 		existing := existingReminder(t, "standup")
-		api, stored, posted := setupAPI(t, []Reminder{existing})
+		api, stored, _ := setupAPI(t, []Reminder{existing})
 		defer api.AssertExpectations(t)
 
 		status, response := submit(t, api, model.StringInterface{
@@ -326,7 +345,10 @@ func TestHandleDialog(t *testing.T) {
 		require.Len(t, *stored, 1)
 		assert.Equal(t, "propa meeting", (*stored)[0].Message)
 		assert.NotEqual(t, existing.Id, (*stored)[0].Id)
-		require.Len(t, *posted, 1, "one reply: the list")
+
+		elements := refreshed(t, response)
+		assert.NotContains(t, elements, dialogElementRemove+existing.Id, "the ticked one is gone")
+		assert.Contains(t, elements, dialogElementRemove+(*stored)[0].Id, "the added one is listed")
 	})
 
 	t.Run("a submit that asks for nothing says so", func(t *testing.T) {

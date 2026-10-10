@@ -165,10 +165,17 @@ func (p *Plugin) handleDialog(w http.ResponseWriter, req *http.Request) {
 		p.removeReminder(user, reminder)
 	}
 
-	// The answer is the list, with its own buttons for everything else.
-	p.API.SendEphemeralPost(user.Id, p.ListReminders(user, request.ChannelId))
+	// The answer is the dialog again, rebuilt: the list it shows is the one the
+	// submission just changed, and it stays open for the next one. A client that
+	// does not know the form response closes the dialog instead, which is what it
+	// did before. /remind list is still there for the buttons a dialog cannot
+	// carry.
+	dialog := p.scheduleDialog(user)
 
-	writeSubmitDialogResponse(w, &model.SubmitDialogResponse{})
+	writeSubmitDialogResponse(w, &model.SubmitDialogResponse{
+		Type: string(model.SubmitDialogResponseTypeForm),
+		Form: &dialog,
+	})
 }
 
 func (p *Plugin) handleViewEphemeral(w http.ResponseWriter, r *http.Request) {

@@ -218,9 +218,11 @@ func (p *Plugin) dialogReminders(reminders []Reminder) []Reminder {
 	return ordered
 }
 
-// dialogReminderElements is one checkbox per reminder, named after it. The label
-// is the "when" and the help text is what the reminder says, because the API
-// caps a display name at 24 bytes.
+// dialogReminderElements is one checkbox per reminder, named after it.
+//
+// A checkbox takes the text beside it from its placeholder, not from its display
+// name, which labels the field and is capped at 24 bytes: the "when" goes there
+// and what the reminder says goes beside the box.
 func (p *Plugin) dialogReminderElements(user *model.User, reminders []Reminder) []model.DialogElement {
 	list := p.dialogReminders(reminders)
 
@@ -230,7 +232,7 @@ func (p *Plugin) dialogReminderElements(user *model.User, reminders []Reminder) 
 			DisplayName: p.dialogReminderLabel(user, reminder),
 			Name:        dialogElementRemove + reminder.Id,
 			Type:        "bool",
-			HelpText:    p.dialogReminderHelp(user, reminder),
+			Placeholder: p.dialogReminderText(user, reminder),
 			Optional:    true,
 		})
 	}
@@ -265,17 +267,17 @@ func (p *Plugin) dialogReminderLabel(user *model.User, reminder Reminder) string
 	}
 }
 
-// dialogReminderHelp is what a checkbox is described by: the reminder's message,
+// dialogReminderText is what a checkbox says beside it: the reminder's message,
 // with the target in front of it when it is not the user themselves.
-func (p *Plugin) dialogReminderHelp(user *model.User, reminder Reminder) string {
+func (p *Plugin) dialogReminderText(user *model.User, reminder Reminder) string {
 	T, _ := p.translation(user)
 
-	help := reminder.Message
+	text := reminder.Message
 	if reminder.Target != "" && reminder.Target != T("me") {
-		help = reminder.Target + ": " + help
+		text = reminder.Target + ": " + text
 	}
 
-	return truncateBytes(help, model.DialogElementHelpTextMaxLength)
+	return truncateBytes(text, model.DialogElementBoolMaxLength)
 }
 
 func sameDay(a, b time.Time) bool {
