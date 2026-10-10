@@ -1,7 +1,10 @@
 dist
+coverage.txt
+coverage.html
 *.iml
-deploy.sh
 .idea
+deploy.sh
+**/.DS_Store
 
 # Local shell environment, holds credentials and is not part of the plugin.
 claude.sh

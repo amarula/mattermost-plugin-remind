@@ -24,7 +24,9 @@ jobs:
           cache: true
 
       - name: Build
-        run: go build ./...
+        # The plugin is the module's only main package, so "go build ./..." would
+        # try to write its binary as ./server, where the package's directory is.
+        run: go build -o /dev/null ./server
 
       - name: Vet
         run: go vet ./...

@@ -37,11 +37,24 @@ Here is the full list of [Examples](https://github.com/scottleedavis/mattermost-
 ### Build
 
 ```
-make
+make dist
 ```
 
-This will produce a single plugin file (with support for multiple architectures) for upload to your Mattermost server:
+This produces one plugin file per platform in the `dist` directory. The platforms
+come from the `server.executables` map in `plugin.json`, so add an entry there to
+build for another one.
 
-```
-dist/com.github.scottleedavis.mattermost-plugin-remind.tar.gz
-```
+| Flavor              | Distribution |
+| ------------------- | ------------ |
+| Linux (x86-64)      | `mattermost-plugin-com.github.scottleedavis.mattermost-plugin-remind-vx.y.z-linux-amd64.tar.gz` |
+| Linux (arm64)       | `mattermost-plugin-com.github.scottleedavis.mattermost-plugin-remind-vx.y.z-linux-arm64.tar.gz` |
+| macOS (Intel)       | `mattermost-plugin-com.github.scottleedavis.mattermost-plugin-remind-vx.y.z-darwin-amd64.tar.gz` |
+| macOS (Apple silicon) | `mattermost-plugin-com.github.scottleedavis.mattermost-plugin-remind-vx.y.z-darwin-arm64.tar.gz` |
+| Windows (x86-64)    | `mattermost-plugin-com.github.scottleedavis.mattermost-plugin-remind-vx.y.z-windows-amd64.tar.gz` |
+
+Upload the file for your server's platform in the Mattermost System Console.
+Tagged releases are built and published by the `Release` workflow in
+`.github/workflows/release.yml`, so pushing a `vx.y.z` tag is all a release
+needs.
+
+`make` on its own runs the style checks, the tests and the build.
