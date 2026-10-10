@@ -185,9 +185,11 @@ func (p *Plugin) InteractiveSchedule(triggerID string, user *model.User) {
 		TriggerId: triggerID,
 		URL:       fmt.Sprintf("/plugins/%s/dialog", PluginID),
 		Dialog: model.Dialog{
-			Title:       T("schedule.reminder"),
-			CallbackId:  model.NewId(),
-			SubmitLabel: T("button.schedule"),
+			Title:      T("schedule.reminder"),
+			CallbackId: model.NewId(),
+			// One button does both: what is ticked is removed, what is filled in
+			// is added.
+			SubmitLabel: T("button.save"),
 			Elements:    elements,
 		},
 	}

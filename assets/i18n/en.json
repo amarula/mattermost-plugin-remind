@@ -240,6 +240,10 @@
     "translation": "Schedule Reminder"
   },
   {
+    "id": "button.save",
+    "translation": "Save"
+  },
+  {
     "id": "button.snooze",
     "translation": "Snooze"
   },
