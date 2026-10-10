@@ -11,6 +11,7 @@ import (
 	"github.com/mattermost/mattermost/server/public/plugin/plugintest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 )
 
 func TestTriggerReminders(t *testing.T) {
@@ -64,6 +65,7 @@ func TestTriggerReminders(t *testing.T) {
 
 func TestTriggerRemindersForTick(t *testing.T) {
 	user := &model.User{
+		Id:       model.NewId(),
 		Email:    "-@-.-",
 		Nickname: "TestUser",
 		Password: model.NewId(),
@@ -107,15 +109,26 @@ func TestTriggerRemindersForTick(t *testing.T) {
 
 	stringOccurrences, _ := json.Marshal(occurrences)
 
-	setupAPI := func() *plugintest.API {
+	setupAPI := func() (*plugintest.API, *[]Reminder, *[]*model.Post) {
+		var stored []Reminder
+		var posted []*model.Post
+
 		api := &plugintest.API{}
 		api.On("LogDebug", mock.Anything, mock.Anything, mock.Anything).Maybe()
 		api.On("LogError", mock.Anything, mock.Anything, mock.Anything).Maybe()
 		api.On("LogInfo", mock.Anything).Maybe()
 		api.On("KVGet", fmt.Sprintf("%v", testTime)).Return(stringOccurrences, nil)
 		api.On("GetUserByUsername", mock.AnythingOfType("string")).Return(user, nil)
-		api.On("CreatePost", mock.Anything).Return(post, nil)
-		return api
+		api.On("GetUser", mock.Anything).Return(user, nil).Maybe()
+		api.On("CreatePost", mock.Anything).Run(func(args mock.Arguments) {
+			posted = append(posted, args.Get(0).(*model.Post))
+		}).Return(post, nil)
+		api.On("KVSet", user.Username, mock.Anything).Run(func(args mock.Arguments) {
+			_ = json.Unmarshal(args.Get(1).([]byte), &stored)
+		}).Return(nil).Maybe()
+		api.On("KVSet", mock.Anything, mock.Anything).Return(nil).Maybe()
+
+		return api, &stored, &posted
 	}
 
 	t.Run("it doesn't trigger on different hostname", func(t *testing.T) {
@@ -141,7 +154,7 @@ func TestTriggerRemindersForTick(t *testing.T) {
 	})
 
 	t.Run("if triggers reminder for me", func(t *testing.T) {
-		api := setupAPI()
+		api, stored, posted := setupAPI()
 		stringReminders, _ := json.Marshal(reminders)
 		api.On("KVGet", user.Username).Return(stringReminders, nil)
 		api.On("GetDirectChannel", mock.Anything, mock.Anything).Return(channel, nil)
@@ -149,12 +162,29 @@ func TestTriggerRemindersForTick(t *testing.T) {
 
 		p := &Plugin{}
 		p.API = api
+		p.emptyTime = time.Time{}.AddDate(1, 1, 1)
 
 		p.TriggerRemindersForTick(testTime)
+
+		// A one-off that has been delivered is done with: it is filed under the
+		// completed reminders instead of waiting in the list to be cleared.
+		require.Len(t, *stored, 1)
+		assert.NotEqual(t, p.emptyTime, (*stored)[0].Completed)
+		assert.True(t, (*stored)[0].Completed.After(testTime.Add(-time.Hour)))
+
+		// And there is nothing left for a Complete button to do.
+		require.Len(t, *posted, 1)
+		actions := (*posted)[0].Attachments()[0].Actions
+		var names []string
+		for _, action := range actions {
+			names = append(names, action.Name)
+		}
+		assert.NotContains(t, names, "button.complete")
+		assert.Len(t, names, 2, "delete and snooze")
 	})
 
 	t.Run("if triggers reminder for user", func(t *testing.T) {
-		api := setupAPI()
+		api, _, _ := setupAPI()
 		reminders[0].Target = "@testuser"
 		stringReminders, _ := json.Marshal(reminders)
 		api.On("KVGet", user.Username).Return(stringReminders, nil)
@@ -168,7 +198,7 @@ func TestTriggerRemindersForTick(t *testing.T) {
 	})
 
 	t.Run("if triggers reminder for channel", func(t *testing.T) {
-		api := setupAPI()
+		api, stored, _ := setupAPI()
 		reminders[0].Target = "~off-topic"
 		stringReminders, _ := json.Marshal(reminders)
 		api.On("KVGet", user.Username).Return(stringReminders, nil)
@@ -177,8 +207,14 @@ func TestTriggerRemindersForTick(t *testing.T) {
 
 		p := &Plugin{}
 		p.API = api
+		p.emptyTime = time.Time{}.AddDate(1, 1, 1)
 
 		p.TriggerRemindersForTick(testTime)
+
+		// A delivered channel one-off would otherwise be listed as past and
+		// incomplete even though it has been said.
+		require.Len(t, *stored, 1)
+		assert.NotEqual(t, p.emptyTime, (*stored)[0].Completed)
 	})
 
 	t.Run("if triggers user reminder recurring", func(t *testing.T) {

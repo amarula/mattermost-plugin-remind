@@ -162,21 +162,10 @@ func (p *Plugin) TriggerRemindersForTick(tickAt time.Time) {
 							"attachments": []*model.MessageAttachment{
 								{
 									Text: T("reminder.message", messageParameters),
+									// A one-off is completed as soon as it is delivered,
+									// so there is nothing left for a Complete button to
+									// do that the delivery has not already done.
 									Actions: []*model.PostAction{
-										{
-											Id: model.NewId(),
-											Integration: &model.PostActionIntegration{
-												Context: model.StringInterface{
-													"orig_user_id":  user.Id,
-													"reminder_id":   reminder.Id,
-													"occurrence_id": occurrence.Id,
-													"action":        "complete",
-												},
-												URL: fmt.Sprintf("/plugins/%s/complete", PluginID),
-											},
-											Type: model.PostActionTypeButton,
-											Name: T("button.complete"),
-										},
 										{
 											Integration: &model.PostActionIntegration{
 												Context: model.StringInterface{
@@ -288,6 +277,8 @@ func (p *Plugin) TriggerRemindersForTick(tickAt time.Time) {
 
 				if occurrence.Repeat != "" {
 					defer p.rescheduleOccurrence(&occurrence)
+				} else {
+					p.completeDeliveredReminder(user.Id, reminder, tickAt)
 				}
 			} else if strings.HasPrefix(reminder.Target, "~") { // ~ channel
 				channel, cErr := p.API.GetChannelByName(
@@ -319,6 +310,8 @@ func (p *Plugin) TriggerRemindersForTick(tickAt time.Time) {
 
 					if occurrence.Repeat != "" {
 						defer p.rescheduleOccurrence(&occurrence)
+					} else {
+						p.completeDeliveredReminder(user.Id, reminder, tickAt)
 					}
 				}
 			}
@@ -528,6 +521,23 @@ func (p *Plugin) DeleteReminders(user *model.User) string {
 	return T("clear.response")
 }
 
+// completeDeliveredReminder files a one-off under the completed reminders once
+// the tick has delivered it, and takes it out of the bucket it fired from so
+// that a replayed tick cannot deliver it a second time. Until this, a delivered
+// one-off sat in the list as "past and incomplete" until someone cleared it by
+// hand, and the list collected everything that would never open again.
+func (p *Plugin) completeDeliveredReminder(userID string, reminder Reminder, firedAt time.Time) {
+	reminder.Completed = time.Now().UTC()
+
+	if err := p.UpdateReminder(userID, reminder); err != nil {
+		p.API.LogError("failed to complete a delivered reminder " + err.Error())
+	}
+
+	// The bucket the tick read, which is the snoozed one when the occurrence was
+	// snoozed: its own time says when it was first due, not where it is filed.
+	p.clearOccurrencesInBucket(reminder, firedAt)
+}
+
 func (p *Plugin) rescheduleOccurrence(occurrence *Occurrence) {
 	time.Sleep(1000 * time.Millisecond)
 
@@ -649,4 +659,23 @@ func (p *Plugin) setLastTickTime(lastTickAt time.Time) {
 	if kvErr != nil {
 		p.API.LogDebug("failed stored lastTickAt %s", kvErr)
 	}
+}
+
+// snoozeOccurrence files an occurrence under the time it was snoozed to and
+// reopens the reminder it belongs to.
+//
+// Reopening matters because a one-off is completed when the tick delivers it:
+// leaving it completed would keep it out of the list while the snooze is
+// pending, and clearing the completed reminders would take it with them, with
+// the snooze still to come.
+func (p *Plugin) snoozeOccurrence(userID string, reminder Reminder, occurrence Occurrence) error {
+	reminder.Completed = p.emptyTime
+
+	if err := p.UpdateReminder(userID, reminder); err != nil {
+		return err
+	}
+
+	p.upsertSnoozedOccurrence(&occurrence)
+
+	return nil
 }

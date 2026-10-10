@@ -394,11 +394,10 @@ func (p *Plugin) handleSnooze(w http.ResponseWriter, r *http.Request) {
 				if occurrence.Id == request.Context["occurrence_id"].(string) {
 					occurrence.Snoozed = time.Now().UTC().Round(time.Second).Add(time.Minute * time.Duration(20))
 					reminder.Occurrences[i] = occurrence
-					upErr := p.UpdateReminder(request.Context["orig_user_id"].(string), reminder)
-					if upErr != nil {
-						p.API.LogError("failed to update reminder %s", upErr)
+					sErr := p.snoozeOccurrence(request.Context["orig_user_id"].(string), reminder, occurrence)
+					if sErr != nil {
+						p.API.LogError("failed to update reminder %s", sErr)
 					}
-					p.upsertSnoozedOccurrence(&occurrence)
 					post.Message = T("action.snooze.20min", snoozeParameters)
 					break
 				}
@@ -408,11 +407,10 @@ func (p *Plugin) handleSnooze(w http.ResponseWriter, r *http.Request) {
 				if occurrence.Id == request.Context["occurrence_id"].(string) {
 					occurrence.Snoozed = time.Now().UTC().Round(time.Second).Add(time.Hour * time.Duration(1))
 					reminder.Occurrences[i] = occurrence
-					upErr := p.UpdateReminder(request.Context["orig_user_id"].(string), reminder)
-					if upErr != nil {
-						p.API.LogError("failed to update reminder %s", upErr)
+					sErr := p.snoozeOccurrence(request.Context["orig_user_id"].(string), reminder, occurrence)
+					if sErr != nil {
+						p.API.LogError("failed to update reminder %s", sErr)
 					}
-					p.upsertSnoozedOccurrence(&occurrence)
 					post.Message = T("action.snooze.1hr", snoozeParameters)
 					break
 				}
@@ -422,11 +420,10 @@ func (p *Plugin) handleSnooze(w http.ResponseWriter, r *http.Request) {
 				if occurrence.Id == request.Context["occurrence_id"].(string) {
 					occurrence.Snoozed = time.Now().UTC().Round(time.Second).Add(time.Hour * time.Duration(3))
 					reminder.Occurrences[i] = occurrence
-					upErr := p.UpdateReminder(request.Context["orig_user_id"].(string), reminder)
-					if upErr != nil {
-						p.API.LogError("failed to update reminder %s", upErr)
+					sErr := p.snoozeOccurrence(request.Context["orig_user_id"].(string), reminder, occurrence)
+					if sErr != nil {
+						p.API.LogError("failed to update reminder %s", sErr)
 					}
-					p.upsertSnoozedOccurrence(&occurrence)
 					post.Message = T("action.snooze.3hr", snoozeParameters)
 					break
 				}
@@ -442,11 +439,10 @@ func (p *Plugin) handleSnooze(w http.ResponseWriter, r *http.Request) {
 						tt := time.Now().In(location).Add(time.Hour * time.Duration(24))
 						occurrence.Snoozed = time.Date(tt.Year(), tt.Month(), tt.Day(), 9, 0, 0, 0, location).UTC()
 						reminder.Occurrences[i] = occurrence
-						upErr := p.UpdateReminder(request.Context["orig_user_id"].(string), reminder)
-						if upErr != nil {
-							p.API.LogError("failed to update reminder %s", upErr)
+						sErr := p.snoozeOccurrence(request.Context["orig_user_id"].(string), reminder, occurrence)
+						if sErr != nil {
+							p.API.LogError("failed to update reminder %s", sErr)
 						}
-						p.upsertSnoozedOccurrence(&occurrence)
 						post.Message = T("action.snooze.tomorrow", snoozeParameters)
 						break
 					}
@@ -474,11 +470,10 @@ func (p *Plugin) handleSnooze(w http.ResponseWriter, r *http.Request) {
 						tt := time.Now().In(location).Add(time.Hour * time.Duration(24))
 						occurrence.Snoozed = time.Date(tt.Year(), tt.Month(), tt.Day(), 9, 0, 0, 0, location).AddDate(0, 0, day).UTC()
 						reminder.Occurrences[i] = occurrence
-						upErr := p.UpdateReminder(request.Context["orig_user_id"].(string), reminder)
-						if upErr != nil {
-							p.API.LogError("failed to update reminder %s", upErr)
+						sErr := p.snoozeOccurrence(request.Context["orig_user_id"].(string), reminder, occurrence)
+						if sErr != nil {
+							p.API.LogError("failed to update reminder %s", sErr)
 						}
-						p.upsertSnoozedOccurrence(&occurrence)
 						post.Message = T("action.snooze.nextweek", snoozeParameters)
 						break
 					}
@@ -587,11 +582,10 @@ func (p *Plugin) handleSnoozeList(w http.ResponseWriter, r *http.Request) {
 			if occurrence.Id == request.Context["occurrence_id"].(string) {
 				occurrence.Snoozed = time.Now().UTC().Round(time.Second).Add(time.Minute * time.Duration(20))
 				reminder.Occurrences[i] = occurrence
-				upErr := p.UpdateReminder(request.UserId, reminder)
-				if upErr != nil {
-					p.API.LogError("failed to update reminder %s", upErr)
+				sErr := p.snoozeOccurrence(request.UserId, reminder, occurrence)
+				if sErr != nil {
+					p.API.LogError("failed to update reminder %s", sErr)
 				}
-				p.upsertSnoozedOccurrence(&occurrence)
 				break
 			}
 		}
@@ -600,11 +594,10 @@ func (p *Plugin) handleSnoozeList(w http.ResponseWriter, r *http.Request) {
 			if occurrence.Id == request.Context["occurrence_id"].(string) {
 				occurrence.Snoozed = time.Now().UTC().Round(time.Second).Add(time.Hour * time.Duration(1))
 				reminder.Occurrences[i] = occurrence
-				upErr := p.UpdateReminder(request.UserId, reminder)
-				if upErr != nil {
-					p.API.LogError("failed to update reminder %s", upErr)
+				sErr := p.snoozeOccurrence(request.UserId, reminder, occurrence)
+				if sErr != nil {
+					p.API.LogError("failed to update reminder %s", sErr)
 				}
-				p.upsertSnoozedOccurrence(&occurrence)
 				break
 			}
 		}
@@ -613,11 +606,10 @@ func (p *Plugin) handleSnoozeList(w http.ResponseWriter, r *http.Request) {
 			if occurrence.Id == request.Context["occurrence_id"].(string) {
 				occurrence.Snoozed = time.Now().UTC().Round(time.Second).Add(time.Hour * time.Duration(3))
 				reminder.Occurrences[i] = occurrence
-				upErr := p.UpdateReminder(request.UserId, reminder)
-				if upErr != nil {
-					p.API.LogError("failed to update reminder %s", upErr)
+				sErr := p.snoozeOccurrence(request.UserId, reminder, occurrence)
+				if sErr != nil {
+					p.API.LogError("failed to update reminder %s", sErr)
 				}
-				p.upsertSnoozedOccurrence(&occurrence)
 				break
 			}
 		}
@@ -632,11 +624,10 @@ func (p *Plugin) handleSnoozeList(w http.ResponseWriter, r *http.Request) {
 					tt := time.Now().In(location).Add(time.Hour * time.Duration(24))
 					occurrence.Snoozed = time.Date(tt.Year(), tt.Month(), tt.Day(), 9, 0, 0, 0, location).UTC()
 					reminder.Occurrences[i] = occurrence
-					upErr := p.UpdateReminder(request.UserId, reminder)
-					if upErr != nil {
-						p.API.LogError("failed to update reminder %s", upErr)
+					sErr := p.snoozeOccurrence(request.UserId, reminder, occurrence)
+					if sErr != nil {
+						p.API.LogError("failed to update reminder %s", sErr)
 					}
-					p.upsertSnoozedOccurrence(&occurrence)
 					break
 				}
 			}
@@ -663,11 +654,10 @@ func (p *Plugin) handleSnoozeList(w http.ResponseWriter, r *http.Request) {
 					tt := time.Now().In(location).Add(time.Hour * time.Duration(24))
 					occurrence.Snoozed = time.Date(tt.Year(), tt.Month(), tt.Day(), 9, 0, 0, 0, location).AddDate(0, 0, day).UTC()
 					reminder.Occurrences[i] = occurrence
-					upErr := p.UpdateReminder(request.UserId, reminder)
-					if upErr != nil {
-						p.API.LogError("failed to update reminder %s", upErr)
+					sErr := p.snoozeOccurrence(request.UserId, reminder, occurrence)
+					if sErr != nil {
+						p.API.LogError("failed to update reminder %s", sErr)
 					}
-					p.upsertSnoozedOccurrence(&occurrence)
 					break
 				}
 			}

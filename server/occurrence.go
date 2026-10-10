@@ -31,7 +31,15 @@ type Occurrence struct {
 }
 
 func (p *Plugin) ClearScheduledOccurrence(reminder Reminder, occurrence Occurrence) {
-	bytes, err := p.API.KVGet(fmt.Sprintf("%v", occurrence.Occurrence))
+	p.clearOccurrencesInBucket(reminder, occurrence.Occurrence)
+}
+
+// clearOccurrencesInBucket drops a reminder's occurrences from the bucket keyed
+// by the time they fire at. The key is passed rather than read off the
+// occurrence because a snoozed one is filed under the time it was snoozed to,
+// while its own time still says when it was first due.
+func (p *Plugin) clearOccurrencesInBucket(reminder Reminder, firesAt time.Time) {
+	bytes, err := p.API.KVGet(fmt.Sprintf("%v", firesAt))
 	if err != nil {
 		p.API.LogError("failed KVGet %s", err)
 		return
@@ -54,11 +62,11 @@ func (p *Plugin) ClearScheduledOccurrence(reminder Reminder, occurrence Occurren
 
 	ro, oErr := json.Marshal(occurrencesDelta)
 	if oErr != nil {
-		p.API.LogError("failed to marshal reminderOccurrences %s", occurrence.Id)
+		p.API.LogError("failed to marshal reminderOccurrences %s", reminder.Id)
 		return
 	}
 
-	kvErr := p.API.KVSet(fmt.Sprintf("%v", occurrence.Occurrence), ro)
+	kvErr := p.API.KVSet(fmt.Sprintf("%v", firesAt), ro)
 	if kvErr != nil {
 		p.API.LogError("failed to store occurrence %s", kvErr)
 	}

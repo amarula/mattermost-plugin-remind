@@ -1273,3 +1273,73 @@ func TestHandleCloseList(t *testing.T) {
 		assert.Equal(t, bodyString, "{\"update\":null,\"ephemeral_text\":\"\",\"skip_slack_parsing\":false}")
 	})
 }
+
+// A one-off is completed when the tick delivers it, so snoozing one has to open
+// it again: leaving it completed would keep it out of the list while the snooze
+// is pending, and clearing the completed reminders would take it with them, with
+// the snooze still to come.
+func TestHandleSnoozeReopensACompletedReminder(t *testing.T) {
+	user := &model.User{Id: model.NewId(), Username: model.NewRandomString(10), Locale: "en"}
+	post := &model.Post{Id: model.NewId(), ChannelId: model.NewId()}
+
+	occurrence := Occurrence{
+		Id:         model.NewId(),
+		ReminderId: model.NewId(),
+		Username:   user.Username,
+		Occurrence: time.Now().UTC().Round(time.Second),
+	}
+	reminder := Reminder{
+		Id:          occurrence.ReminderId,
+		TeamId:      model.NewId(),
+		Username:    user.Username,
+		Message:     "Hello",
+		Target:      "me",
+		When:        "in one minute",
+		Completed:   time.Now().UTC().Add(-time.Minute),
+		Occurrences: []Occurrence{occurrence},
+	}
+
+	var stored []Reminder
+
+	api := &plugintest.API{}
+	api.On("LogDebug", mock.Anything, mock.Anything, mock.Anything).Maybe()
+	api.On("LogError", mock.Anything, mock.Anything, mock.Anything).Maybe()
+	api.On("LogInfo", mock.Anything).Maybe()
+	api.On("GetPost", mock.Anything).Return(post, nil)
+	api.On("UpdatePost", mock.Anything).Return(post, nil)
+	api.On("GetUser", mock.Anything).Return(user, nil)
+	api.On("GetUserByUsername", mock.Anything).Return(user, nil)
+	api.On("KVGet", user.Username).Return(mustMarshal(t, []Reminder{reminder}), nil)
+	api.On("KVGet", mock.Anything).Return(nil, nil).Maybe()
+	api.On("KVSet", user.Username, mock.Anything).Run(func(args mock.Arguments) {
+		_ = json.Unmarshal(args.Get(1).([]byte), &stored)
+	}).Return(nil)
+	api.On("KVSet", mock.Anything, mock.Anything).Return(nil).Maybe()
+	defer api.AssertExpectations(t)
+
+	p := &Plugin{}
+	p.router = p.InitAPI()
+	p.API = api
+	p.emptyTime = time.Time{}.AddDate(1, 1, 1)
+
+	request := &model.PostActionIntegrationRequest{
+		UserId: user.Id,
+		PostId: post.Id,
+		Context: model.StringInterface{
+			"orig_user_id":    user.Id,
+			"reminder_id":     reminder.Id,
+			"occurrence_id":   occurrence.Id,
+			"selected_option": "20min",
+		},
+	}
+
+	w := httptest.NewRecorder()
+	body, err := json.Marshal(request)
+	require.NoError(t, err)
+	p.ServeHTTP(nil, w, httptest.NewRequest("POST", "/snooze", bytes.NewReader(body)))
+
+	require.Len(t, stored, 1)
+	assert.Equal(t, p.emptyTime, stored[0].Completed, "the snooze opened it again")
+	require.Len(t, stored[0].Occurrences, 1)
+	assert.False(t, stored[0].Occurrences[0].Snoozed.IsZero(), "and filed it under the snooze")
+}
