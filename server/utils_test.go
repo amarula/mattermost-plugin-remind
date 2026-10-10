@@ -4,7 +4,9 @@ import (
 	"testing"
 
 	"github.com/mattermost/mattermost/server/public/model"
+	"github.com/mattermost/mattermost/server/public/plugin/plugintest"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 )
 
 func TestTranslation(t *testing.T) {
@@ -43,6 +45,32 @@ func TestLocation(t *testing.T) {
 			Timezone: timezone,
 		}
 
+		location := p.location(user)
+		assert.NotNil(t, location)
+	})
+
+	t.Run("if a timezone cannot be resolved, it still answers", func(t *testing.T) {
+		api := &plugintest.API{}
+		api.On("LogError", mock.Anything).Maybe()
+		defer api.AssertExpectations(t)
+
+		p := &Plugin{}
+		p.API = api
+
+		timezone := make(map[string]string)
+		timezone["manualTimezone"] = "Mars/Olympus"
+		user := &model.User{
+			Email:    "-@-.-",
+			Nickname: "TestUser",
+			Password: model.NewId(),
+			Username: "testuser",
+			Roles:    model.SystemUserRoleId,
+			Locale:   "en",
+			Timezone: timezone,
+		}
+
+		// time.In and time.Date panic on a nil location, and this is on the path
+		// the reminder tick takes, so the fallback has to be a location.
 		location := p.location(user)
 		assert.NotNil(t, location)
 	})
