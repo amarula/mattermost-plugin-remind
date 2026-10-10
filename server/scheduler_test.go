@@ -172,32 +172,38 @@ func TestInteractiveSchedule(t *testing.T) {
 		assert.Equal(t, TfuncWithFallback("en")("schedule.when.help"), when.HelpText)
 	})
 
-	t.Run("there is a row of fields for each reminder a submit can add", func(t *testing.T) {
+	t.Run("one row is offered, and a count to ask for more", func(t *testing.T) {
 		dialog := openDialog(t, user, nil)
 
 		rows := 0
 		suffixes := map[string]bool{}
-		for row := 1; ; row++ {
-			found := false
-			for _, element := range dialog.Elements {
-				parts := strings.SplitN(element.Name, "_", 3)
-				if len(parts) == 3 && parts[0] == dialogElementMessage && parts[2] == strconv.Itoa(row) {
-					found = true
-					suffixes[parts[1]] = true
-				}
+		for _, element := range dialog.Elements {
+			parts := strings.SplitN(element.Name, "_", 3)
+			if len(parts) == 3 && parts[0] == dialogElementMessage {
+				rows++
+				suffixes[parts[1]] = true
 			}
-
-			if !found {
-				break
-			}
-
-			rows++
 		}
 
-		assert.Equal(t, dialogNewReminderRows, rows, "rows to add reminders in")
+		assert.Equal(t, 1, rows, "rows to add a reminder in")
 		// One suffix for the whole dialog: it is what makes a rebuilt dialog
 		// hand back empty rows rather than the ones just submitted.
 		assert.Len(t, suffixes, 1)
+
+		// The count is what redraws the dialog with more rows, so it is the one
+		// element that asks the client to come back before it is submitted.
+		var count model.DialogElement
+		for _, element := range dialog.Elements {
+			if strings.HasPrefix(element.Name, dialogElementRows+"_") {
+				count = element
+			}
+		}
+		require.NotEmpty(t, count.Name, "the dialog offers a count")
+		assert.Equal(t, "select", count.Type)
+		assert.True(t, count.Refresh, "changing it redraws the dialog")
+		assert.Equal(t, strconv.Itoa(1), count.Default)
+		assert.Len(t, count.Options, dialogNewReminderRows)
+		assert.Equal(t, "/plugins/"+PluginID+"/dialog", dialog.SourceURL, "where it is redrawn from")
 	})
 
 	t.Run("every reminder that can still fire is a checkbox named after it", func(t *testing.T) {

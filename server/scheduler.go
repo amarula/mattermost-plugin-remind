@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -106,9 +107,15 @@ func (p *Plugin) ScheduleReminder(request *ReminderRequest, channelID string) (*
 	}, nil
 }
 
-// scheduleDialog is the dialog /remind opens. It is also the one a submission is
-// answered with, so the list it shows is the one the submission just changed.
-func (p *Plugin) scheduleDialog(user *model.User) model.Dialog {
+// scheduleDialog is the dialog /remind opens. It is also the one a submission and
+// a field refresh are answered with, so the list it shows is the one the
+// submission just changed.
+//
+// The rows are named after a suffix: opening the dialog and saving hand out a
+// fresh one, so a client that keeps the values of fields whose names match hands
+// back empty rows rather than the ones just submitted, while a refresh keeps the
+// suffix it was given so that what has been typed survives it.
+func (p *Plugin) scheduleDialog(user *model.User, rows int, suffix string) model.Dialog {
 	T, _ := p.translation(user)
 	// The zone the picker shows its times in, and the zone the phrase it
 	// composes is read in. Empty when the user has set none.
@@ -117,13 +124,9 @@ func (p *Plugin) scheduleDialog(user *model.User) model.Dialog {
 	// The reminders come first: ticking one marks it for removal, and filling in
 	// the fields below adds one. A single submit does both, so every field is
 	// optional and the rule between them lives in the handler.
-	// The rows are named after a suffix that changes every time the dialog is
-	// built, so a client that keeps the values of fields whose names match hands
-	// back empty rows rather than the ones it has just submitted.
-	suffix := model.NewId()[:8]
-
 	elements := p.dialogReminderElements(user, p.GetReminders(user.Username))
-	for row := 1; row <= dialogNewReminderRows; row++ {
+	elements = append(elements, p.dialogRowCountElement(user, suffix, rows))
+	for row := 1; row <= rows; row++ {
 		elements = append(elements, p.dialogRowElements(user, suffix, row, timezone)...)
 	}
 
@@ -146,6 +149,39 @@ func (p *Plugin) scheduleDialog(user *model.User) model.Dialog {
 		// added.
 		SubmitLabel: T("button.save"),
 		Elements:    elements,
+		// Where the client asks for another number of rows from, when the count
+		// above changes.
+		SourceURL: fmt.Sprintf("/plugins/%s/dialog", PluginID),
+	}
+}
+
+// dialogSuffix names the fields of one build of the dialog. It is fresh when the
+// dialog opens and after a save, and kept across a refresh.
+func dialogSuffix() string {
+	return model.NewId()[:8]
+}
+
+// dialogRowCountElement is how many reminders the dialog offers rows for. It
+// redraws the dialog when it changes, which is how a row is added to it.
+func (p *Plugin) dialogRowCountElement(user *model.User, suffix string, rows int) model.DialogElement {
+	T, _ := p.translation(user)
+
+	options := make([]*model.PostActionOptions, 0, dialogNewReminderRows)
+	for count := 1; count <= dialogNewReminderRows; count++ {
+		options = append(options, &model.PostActionOptions{
+			Text:  strconv.Itoa(count),
+			Value: strconv.Itoa(count),
+		})
+	}
+
+	return model.DialogElement{
+		DisplayName: T("schedule.rows"),
+		Name:        dialogElementRows + "_" + suffix,
+		Type:        "select",
+		SubType:     "select",
+		Default:     strconv.Itoa(rows),
+		Options:     options,
+		Refresh:     true,
 	}
 }
 
@@ -153,7 +189,7 @@ func (p *Plugin) InteractiveSchedule(triggerID string, user *model.User) {
 	dialogRequest := model.OpenDialogRequest{
 		TriggerId: triggerID,
 		URL:       fmt.Sprintf("/plugins/%s/dialog", PluginID),
-		Dialog:    p.scheduleDialog(user),
+		Dialog:    p.scheduleDialog(user, 1, dialogSuffix()),
 	}
 
 	if pErr := p.API.OpenInteractiveDialog(dialogRequest); pErr != nil {

@@ -93,12 +93,13 @@ func TestHandleDialog(t *testing.T) {
 	}
 
 	// rowFields are the names the nth new-reminder row's fields are submitted
-	// under, read out of the dialog the way a client would see them.
+	// under, read out of the dialog the way a client would see them. The dialog
+	// is built with every row it can offer, so any row can be named.
 	rowFields := func(t *testing.T, p *Plugin, row int) (string, string, string) {
 		t.Helper()
 
 		var message, when, repeat string
-		for _, element := range p.scheduleDialog(user).Elements {
+		for _, element := range p.scheduleDialog(user, dialogNewReminderRows, dialogSuffix()).Elements {
 			field, rest, found := strings.Cut(element.Name, "_")
 			if !found || rest[strings.LastIndex(rest, "_")+1:] != strconv.Itoa(row) {
 				continue
@@ -121,10 +122,11 @@ func TestHandleDialog(t *testing.T) {
 		return message, when, repeat
 	}
 
-	submit := func(t *testing.T, p *Plugin, submission model.StringInterface) (int, model.SubmitDialogResponse) {
+	submitTyped := func(t *testing.T, p *Plugin, requestType string, submission model.StringInterface) (int, model.SubmitDialogResponse) {
 		t.Helper()
 
 		request := &model.SubmitDialogRequest{
+			Type:       requestType,
 			UserId:     user.Id,
 			ChannelId:  model.NewId(),
 			Submission: submission,
@@ -139,6 +141,12 @@ func TestHandleDialog(t *testing.T) {
 		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
 
 		return w.Code, response
+	}
+
+	submit := func(t *testing.T, p *Plugin, submission model.StringInterface) (int, model.SubmitDialogResponse) {
+		t.Helper()
+
+		return submitTyped(t, p, "", submission)
 	}
 
 	t.Run("a row is stored at the instant that was picked", func(t *testing.T) {
@@ -325,6 +333,58 @@ func TestHandleDialog(t *testing.T) {
 				assert.Empty(t, *stored, "nothing is stored")
 			})
 		}
+	})
+
+	t.Run("a refresh redraws the dialog with the rows that were asked for", func(t *testing.T) {
+		api, stored, _ := setupAPI(t, nil)
+		defer api.AssertExpectations(t)
+
+		p := newPlugin(api)
+
+		// The dialog the client is looking at: one row, and the count beside it.
+		var count string
+		for _, element := range p.scheduleDialog(user, 1, dialogSuffix()).Elements {
+			if strings.HasPrefix(element.Name, dialogElementRows+"_") {
+				count = element.Name
+			}
+		}
+		require.NotEmpty(t, count)
+
+		// Changing the count sends the whole form back, with nothing submitted.
+		message, when, _ := rowFields(t, p, 1)
+		status, response := submitTyped(t, p, dialogRequestRefresh, model.StringInterface{
+			count:   "3",
+			message: "standup",
+			when:    "2026-11-05T14:30:00Z",
+		})
+
+		assert.Equal(t, 200, status)
+		assert.Empty(t, *stored, "a refresh stores nothing")
+
+		form := response.Form
+		require.NotNil(t, form)
+		require.NoError(t, form.IsValid())
+
+		// Three rows now, and the first one is named as it was, which is what
+		// carries what was typed across the redraw.
+		rows := 0
+		for _, element := range form.Elements {
+			parts := strings.SplitN(element.Name, "_", 3)
+			if len(parts) == 3 && parts[0] == dialogElementMessage {
+				rows++
+			}
+		}
+		assert.Equal(t, 3, rows)
+
+		_, _, repeat := rowFields(t, p, 1)
+		_ = repeat
+
+		var redrawn []string
+		for _, element := range form.Elements {
+			redrawn = append(redrawn, element.Name)
+		}
+		assert.Contains(t, redrawn, message)
+		assert.Contains(t, redrawn, when)
 	})
 
 	t.Run("a submission that is not JSON is refused", func(t *testing.T) {

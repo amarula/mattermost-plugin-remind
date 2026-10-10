@@ -29,7 +29,12 @@ const (
 	dialogElementTarget  = "target"
 	dialogElementWhen    = "when"
 	dialogElementRepeat  = "repeat"
+	dialogElementRows    = "rows"
 )
+
+// dialogRequestRefresh is the type of a submission the client sends when a field
+// marked for refresh changes, rather than when the dialog is submitted.
+const dialogRequestRefresh = "refresh"
 
 var errDialogDateTime = errors.New("unrecognized datetime")
 
@@ -435,7 +440,55 @@ func (r dialogRow) filled() bool {
 // refreshedDialog is the dialog a submission is answered with: the list it shows
 // is the one the submission just changed.
 func (p *Plugin) refreshedDialog(user *model.User) *model.Dialog {
-	dialog := p.scheduleDialog(user)
+	dialog := p.scheduleDialog(user, 1, dialogSuffix())
 
 	return &dialog
+}
+
+// dialogRowCount is how many rows the dialog is redrawn with: the number the count
+// select stands on, bounded by what the dialog offers. A refresh is the only
+// thing that reads it.
+func dialogRowCount(submission map[string]any) int {
+	for name := range submission {
+		suffix, found := strings.CutPrefix(name, dialogElementRows+"_")
+		if !found || suffix == "" {
+			continue
+		}
+
+		count, convertErr := strconv.Atoi(submissionString(submission, name))
+		if convertErr != nil {
+			break
+		}
+
+		if count < 1 {
+			count = 1
+		}
+
+		if count > dialogNewReminderRows {
+			count = dialogNewReminderRows
+		}
+
+		return count
+	}
+
+	return 1
+}
+
+// dialogSuffixOf is the suffix the submitted rows were named with, so a redrawn
+// dialog keeps it and the client carries over what has been typed. A submission
+// with no rows in it - which a refresh cannot be - gets a new one.
+func dialogSuffixOf(submission map[string]any) string {
+	for name := range submission {
+		parts := strings.SplitN(name, "_", 3)
+		if len(parts) != 3 {
+			continue
+		}
+
+		switch parts[0] {
+		case dialogElementMessage, dialogElementWhen, dialogElementRepeat:
+			return parts[1]
+		}
+	}
+
+	return dialogSuffix()
 }

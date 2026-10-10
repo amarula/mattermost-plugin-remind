@@ -56,6 +56,10 @@
     "translation": "Fill in a row to add a reminder; rows left empty are ignored."
   },
   {
+    "id": "schedule.rows",
+    "translation": "Reminders to add"
+  },
+  {
     "id": "schedule.repeat",
     "translation": "Repeat"
   },

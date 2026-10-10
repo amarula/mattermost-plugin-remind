@@ -75,6 +75,20 @@ func (p *Plugin) handleDialog(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	// A refresh is the client asking for the same dialog with a different number
+	// of rows, sent when the count changes. Nothing has been submitted yet, so
+	// nothing is validated: the suffix is kept so that what has been typed into
+	// the rows survives the redraw.
+	if request.Type == dialogRequestRefresh {
+		dialog := p.scheduleDialog(user, dialogRowCount(request.Submission), dialogSuffixOf(request.Submission))
+
+		writeSubmitDialogResponse(w, &model.SubmitDialogResponse{
+			Type: string(model.SubmitDialogResponseTypeForm),
+			Form: &dialog,
+		})
+		return
+	}
+
 	T, _ := p.translation(user)
 	location := p.location(user)
 
