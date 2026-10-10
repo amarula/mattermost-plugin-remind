@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -117,11 +118,26 @@ func TestInteractiveSchedule(t *testing.T) {
 		return elements
 	}
 
-	t.Run("the time is picked, and shown in the user's zone", func(t *testing.T) {
-		elements := elementsByName(openDialog(t, user, nil))
+	// rowElement is a field of one of the add rows, which are named
+	// "<field>_<suffix>_<row>".
+	rowElement := func(t *testing.T, dialog model.Dialog, field string, row int) model.DialogElement {
+		t.Helper()
 
-		when, ok := elements[dialogElementWhen]
-		require.True(t, ok)
+		for _, element := range dialog.Elements {
+			parts := strings.SplitN(element.Name, "_", 3)
+			if len(parts) == 3 && parts[0] == field && parts[2] == strconv.Itoa(row) {
+				return element
+			}
+		}
+
+		require.FailNow(t, "the dialog has no such row", "field %s of row %d", field, row)
+
+		return model.DialogElement{}
+	}
+
+	t.Run("the time is picked, and shown in the user's zone", func(t *testing.T) {
+		when := rowElement(t, openDialog(t, user, nil), dialogElementWhen, 1)
+
 		assert.Equal(t, "datetime", when.Type)
 		require.NotNil(t, when.DateTimeConfig)
 		assert.Equal(t, "today", when.DateTimeConfig.MinDate)
@@ -133,10 +149,8 @@ func TestInteractiveSchedule(t *testing.T) {
 	})
 
 	t.Run("the repeat offers each cadence the engine can express", func(t *testing.T) {
-		elements := elementsByName(openDialog(t, user, nil))
+		repeat := rowElement(t, openDialog(t, user, nil), dialogElementRepeat, 1)
 
-		repeat, ok := elements[dialogElementRepeat]
-		require.True(t, ok)
 		assert.Equal(t, "select", repeat.Type)
 		assert.Equal(t, repeatOnce, repeat.Default)
 
@@ -148,14 +162,42 @@ func TestInteractiveSchedule(t *testing.T) {
 	})
 
 	t.Run("a user with no zone is left to the device's", func(t *testing.T) {
-		elements := elementsByName(openDialog(t, &model.User{Username: "testuser", Locale: "en"}, nil))
+		when := rowElement(t, openDialog(t, &model.User{Username: "testuser", Locale: "en"}, nil),
+			dialogElementWhen, 1)
 
-		when := elements[dialogElementWhen]
 		require.NotNil(t, when.DateTimeConfig)
 		// "Local" is what Go calls the host's zone, and it is not a name the
 		// picker can be handed.
 		assert.Empty(t, when.DateTimeConfig.LocationTimezone)
 		assert.Equal(t, TfuncWithFallback("en")("schedule.when.help"), when.HelpText)
+	})
+
+	t.Run("there is a row of fields for each reminder a submit can add", func(t *testing.T) {
+		dialog := openDialog(t, user, nil)
+
+		rows := 0
+		suffixes := map[string]bool{}
+		for row := 1; ; row++ {
+			found := false
+			for _, element := range dialog.Elements {
+				parts := strings.SplitN(element.Name, "_", 3)
+				if len(parts) == 3 && parts[0] == dialogElementMessage && parts[2] == strconv.Itoa(row) {
+					found = true
+					suffixes[parts[1]] = true
+				}
+			}
+
+			if !found {
+				break
+			}
+
+			rows++
+		}
+
+		assert.Equal(t, dialogNewReminderRows, rows, "rows to add reminders in")
+		// One suffix for the whole dialog: it is what makes a rebuilt dialog
+		// hand back empty rows rather than the ones just submitted.
+		assert.Len(t, suffixes, 1)
 	})
 
 	t.Run("every reminder that can still fire is a checkbox named after it", func(t *testing.T) {

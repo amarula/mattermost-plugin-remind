@@ -28,6 +28,10 @@
     "translation": "@user or ~channel"
   },
   {
+    "id": "schedule.target.rows",
+    "translation": "Every reminder saved here goes to this target."
+  },
+  {
     "id": "schedule.time",
     "translation": "Time"
   },
@@ -49,7 +53,7 @@
   },
   {
     "id": "schedule.message.help",
-    "translation": "Fill this in with a time to add a reminder, or tick one above to remove it."
+    "translation": "Fill in a row to add a reminder; rows left empty are ignored."
   },
   {
     "id": "schedule.repeat",

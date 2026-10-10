@@ -2,6 +2,9 @@ package main
 
 import (
 	"errors"
+	"fmt"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -333,4 +336,106 @@ func (p *Plugin) removeReminder(user *model.User, reminder Reminder) {
 	if err := p.DeleteReminder(user.Id, reminder); err != nil {
 		p.API.LogError("failed to delete reminder " + err.Error())
 	}
+}
+
+// dialogNewReminderRows is how many reminders one submission can add. Empty rows
+// are ignored, and the dialog comes back with them empty again, so the number
+// only decides how many can be set up in one go.
+const dialogNewReminderRows = 3
+
+// dialogRowName names one field of one row of a dialog. The suffix changes every
+// time the dialog is built, so a client that keeps the values of fields whose
+// names match cannot hand back a row that has already been added.
+func dialogRowName(field string, suffix string, row int) string {
+	return fmt.Sprintf("%s_%s_%d", field, suffix, row)
+}
+
+// dialogRow is one "new reminder" row of a submission: what to be reminded of,
+// when, and how it repeats if it does.
+type dialogRow struct {
+	row     int
+	message string
+	when    string
+	repeat  string
+
+	// The names the row's fields were submitted under, so an error can be
+	// answered on the field it belongs to.
+	messageElement string
+	whenElement    string
+}
+
+// dialogRows reads the add rows out of a submission, in the order they appear in
+// the dialog. A field of a row is named "<field>_<suffix>_<row>", and the row is
+// read from the name's last part, so this does not depend on the suffix coming
+// back.
+func dialogRows(submission map[string]any) []dialogRow {
+	rows := map[int]*dialogRow{}
+
+	for name := range submission {
+		// A field of a row is named "<field>_<suffix>_<row>"; anything else in
+		// the submission - the target, a removal checkbox - is not part of a row.
+		parts := strings.SplitN(name, "_", 3)
+		if len(parts) != 3 {
+			continue
+		}
+
+		field, suffix := parts[0], parts[1]
+		switch field {
+		case dialogElementMessage, dialogElementWhen, dialogElementRepeat:
+		default:
+			continue
+		}
+
+		index, convertErr := strconv.Atoi(parts[2])
+		if convertErr != nil {
+			continue
+		}
+
+		row, ok := rows[index]
+		if !ok {
+			// A row whose repeat field never arrived is a one-off: the field is
+			// not something the client has to send, and anything unrecognized
+			// reads as once.
+			row = &dialogRow{row: index, repeat: repeatOnce}
+			rows[index] = row
+		}
+
+		// The names are built rather than taken from what arrived, so a field
+		// the client left out of the submission still has the name an error can
+		// be answered on.
+		row.messageElement = dialogRowName(dialogElementMessage, suffix, index)
+		row.whenElement = dialogRowName(dialogElementWhen, suffix, index)
+
+		switch field {
+		case dialogElementMessage:
+			row.message = strings.TrimSpace(submissionString(submission, name))
+		case dialogElementWhen:
+			row.when = submissionString(submission, name)
+		case dialogElementRepeat:
+			row.repeat = dialogRepeat(submissionString(submission, name))
+		}
+	}
+
+	ordered := make([]dialogRow, 0, len(rows))
+	for _, row := range rows {
+		ordered = append(ordered, *row)
+	}
+
+	sort.Slice(ordered, func(i, j int) bool { return ordered[i].row < ordered[j].row })
+
+	return ordered
+}
+
+// filled is whether the row asks for a reminder at all: a row the user left
+// alone is not one.
+func (r dialogRow) filled() bool {
+	return r.message != "" || r.when != ""
+}
+
+// refreshedDialog is the dialog a submission is answered with: the list it shows
+// is the one the submission just changed.
+func (p *Plugin) refreshedDialog(user *model.User) *model.Dialog {
+	dialog := p.scheduleDialog(user)
+
+	return &dialog
 }

@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -81,14 +82,47 @@ func TestHandleDialog(t *testing.T) {
 		return elements
 	}
 
-	submit := func(t *testing.T, api *plugintest.API, submission model.StringInterface) (int, model.SubmitDialogResponse) {
-		t.Helper()
-
+	newPlugin := func(api *plugintest.API) *Plugin {
 		p := &Plugin{}
 		p.API = api
 		p.router = p.InitAPI()
 		p.emptyTime = time.Time{}.AddDate(1, 1, 1)
 		p.locales = map[string]string{"en": "/test/en.json"}
+
+		return p
+	}
+
+	// rowFields are the names the nth new-reminder row's fields are submitted
+	// under, read out of the dialog the way a client would see them.
+	rowFields := func(t *testing.T, p *Plugin, row int) (string, string, string) {
+		t.Helper()
+
+		var message, when, repeat string
+		for _, element := range p.scheduleDialog(user).Elements {
+			field, rest, found := strings.Cut(element.Name, "_")
+			if !found || rest[strings.LastIndex(rest, "_")+1:] != strconv.Itoa(row) {
+				continue
+			}
+
+			switch field {
+			case dialogElementMessage:
+				message = element.Name
+			case dialogElementWhen:
+				when = element.Name
+			case dialogElementRepeat:
+				repeat = element.Name
+			}
+		}
+
+		require.NotEmpty(t, message, "row %d has no message field", row)
+		require.NotEmpty(t, when, "row %d has no time field", row)
+		require.NotEmpty(t, repeat, "row %d has no repeat field", row)
+
+		return message, when, repeat
+	}
+
+	submit := func(t *testing.T, p *Plugin, submission model.StringInterface) (int, model.SubmitDialogResponse) {
+		t.Helper()
 
 		request := &model.SubmitDialogRequest{
 			UserId:     user.Id,
@@ -107,14 +141,16 @@ func TestHandleDialog(t *testing.T) {
 		return w.Code, response
 	}
 
-	t.Run("a one-off is stored at the instant that was picked", func(t *testing.T) {
-		api, stored, posted := setupAPI(t, nil)
+	t.Run("a row is stored at the instant that was picked", func(t *testing.T) {
+		api, stored, _ := setupAPI(t, nil)
 		defer api.AssertExpectations(t)
 
-		status, response := submit(t, api, model.StringInterface{
-			dialogElementMessage: "standup",
-			dialogElementWhen:    "2026-11-05T14:30:00Z",
-			dialogElementRepeat:  repeatOnce,
+		p := newPlugin(api)
+		message, when, _ := rowFields(t, p, 1)
+
+		status, response := submit(t, p, model.StringInterface{
+			message: "standup",
+			when:    "2026-11-05T14:30:00Z",
 		})
 
 		assert.Equal(t, 200, status)
@@ -128,18 +164,71 @@ func TestHandleDialog(t *testing.T) {
 		assert.True(t, picked.Equal((*stored)[0].Occurrences[0].Occurrence))
 		assert.Empty(t, (*stored)[0].Occurrences[0].Repeat)
 
-		assert.Empty(t, *posted, "the answer is the dialog, not a post")
-		require.Len(t, refreshed(t, response), 5, "the list, the four fields and nothing else")
+		assert.NotEmpty(t, refreshed(t, response), "the dialog answers")
+	})
+
+	t.Run("every row that was filled in is added", func(t *testing.T) {
+		api, stored, _ := setupAPI(t, nil)
+		defer api.AssertExpectations(t)
+
+		p := newPlugin(api)
+		firstMessage, firstWhen, _ := rowFields(t, p, 1)
+		secondMessage, secondWhen, secondRepeat := rowFields(t, p, 2)
+
+		status, response := submit(t, p, model.StringInterface{
+			firstMessage:  "standup",
+			firstWhen:     "2026-11-05T14:30:00Z",
+			secondMessage: "propa meeting",
+			secondWhen:    "2026-11-06T09:00:00Z",
+			secondRepeat:  repeatDaily,
+		})
+
+		assert.Equal(t, 200, status)
+		assert.Empty(t, response.Errors)
+
+		require.Len(t, *stored, 2)
+		assert.Equal(t, "standup", (*stored)[0].Message)
+		assert.Equal(t, "propa meeting", (*stored)[1].Message)
+		assert.Equal(t, "every day at 9:00AM", (*stored)[1].When)
+
+		// Both are listed in the dialog that comes back.
+		elements := refreshed(t, response)
+		for _, reminder := range *stored {
+			assert.Contains(t, elements, dialogElementRemove+reminder.Id)
+		}
+	})
+
+	t.Run("a row that was left alone is not added", func(t *testing.T) {
+		api, stored, _ := setupAPI(t, nil)
+		defer api.AssertExpectations(t)
+
+		p := newPlugin(api)
+		message, when, _ := rowFields(t, p, 1)
+		_, _, secondRepeat := rowFields(t, p, 2)
+
+		status, response := submit(t, p, model.StringInterface{
+			message: "standup",
+			when:    "2026-11-05T14:30:00Z",
+			// A row nobody touched still submits its repeat's default.
+			secondRepeat: repeatOnce,
+		})
+
+		assert.Equal(t, 200, status)
+		assert.Empty(t, response.Errors)
+		require.Len(t, *stored, 1, "an untouched row is not a reminder")
+		assert.Equal(t, "standup", (*stored)[0].Message)
 	})
 
 	t.Run("a wall clock is read in the user's zone", func(t *testing.T) {
 		api, stored, _ := setupAPI(t, nil)
 		defer api.AssertExpectations(t)
 
-		status, _ := submit(t, api, model.StringInterface{
-			dialogElementMessage: "standup",
-			dialogElementWhen:    "2026-11-05T14:30:00",
-			dialogElementRepeat:  repeatOnce,
+		p := newPlugin(api)
+		message, when, _ := rowFields(t, p, 1)
+
+		status, _ := submit(t, p, model.StringInterface{
+			message: "standup",
+			when:    "2026-11-05T14:30:00",
 		})
 
 		assert.Equal(t, 200, status)
@@ -153,10 +242,13 @@ func TestHandleDialog(t *testing.T) {
 		api, stored, _ := setupAPI(t, nil)
 		defer api.AssertExpectations(t)
 
-		status, _ := submit(t, api, model.StringInterface{
-			dialogElementMessage: "standup",
-			dialogElementWhen:    "2026-11-05T14:30:00Z",
-			dialogElementRepeat:  repeatWeekly,
+		p := newPlugin(api)
+		message, when, repeat := rowFields(t, p, 1)
+
+		status, _ := submit(t, p, model.StringInterface{
+			message: "standup",
+			when:    "2026-11-05T14:30:00Z",
+			repeat:  repeatWeekly,
 		})
 
 		assert.Equal(t, 200, status)
@@ -168,61 +260,69 @@ func TestHandleDialog(t *testing.T) {
 
 	t.Run("what cannot be acted on comes back on the field it belongs to", func(t *testing.T) {
 		tests := []struct {
-			name       string
-			submission model.StringInterface
-			field      string
+			name string
+			// fill is given the names of row one's fields, read once: every call
+			// to the dialog builder names them differently.
+			fill func(message, when, repeat string) model.StringInterface
+			// erroredOn is the field the error is expected on.
+			erroredOn func(message, when, repeat string) string
 		}{
 			{
-				name:       "no message",
-				submission: model.StringInterface{dialogElementWhen: "2026-11-05T14:30:00Z"},
-				field:      dialogElementMessage,
+				name: "a row with a time and no message",
+				fill: func(_, when, _ string) model.StringInterface {
+					return model.StringInterface{when: "2026-11-05T14:30:00Z"}
+				},
+				erroredOn: func(message, _, _ string) string { return message },
 			},
 			{
-				name:       "no time",
-				submission: model.StringInterface{dialogElementMessage: "standup"},
-				field:      dialogElementWhen,
+				name: "a row with a message and no time",
+				fill: func(message, _, _ string) model.StringInterface {
+					return model.StringInterface{message: "standup"}
+				},
+				erroredOn: func(_, when, _ string) string { return when },
 			},
 			{
 				name: "a time that cannot be read",
-				submission: model.StringInterface{
-					dialogElementMessage: "standup",
-					dialogElementWhen:    "half past two",
+				fill: func(message, when, _ string) model.StringInterface {
+					return model.StringInterface{message: "standup", when: "half past two"}
 				},
-				field: dialogElementWhen,
+				erroredOn: func(_, when, _ string) string { return when },
 			},
 			{
 				name: "a time that has passed",
-				submission: model.StringInterface{
-					dialogElementMessage: "standup",
-					dialogElementWhen:    "2020-01-01T09:00:00Z",
+				fill: func(message, when, _ string) model.StringInterface {
+					return model.StringInterface{message: "standup", when: "2020-01-01T09:00:00Z"}
 				},
-				field: dialogElementWhen,
+				erroredOn: func(_, when, _ string) string { return when },
 			},
 			{
 				name: "a repeat aimed at someone else",
-				submission: model.StringInterface{
-					dialogElementMessage: "standup",
-					dialogElementWhen:    "2026-11-05T14:30:00Z",
-					dialogElementRepeat:  repeatDaily,
-					dialogElementTarget:  "@someone",
+				fill: func(message, when, repeat string) model.StringInterface {
+					return model.StringInterface{
+						message:             "standup",
+						when:                "2026-11-05T14:30:00Z",
+						repeat:              repeatDaily,
+						dialogElementTarget: "@someone",
+					}
 				},
-				field: dialogElementTarget,
+				erroredOn: func(_, _, _ string) string { return dialogElementTarget },
 			},
 		}
 
 		for _, test := range tests {
 			t.Run(test.name, func(t *testing.T) {
-				api, stored, posted := setupAPI(t, nil)
+				api, stored, _ := setupAPI(t, nil)
 				defer api.AssertExpectations(t)
 
-				status, response := submit(t, api, test.submission)
+				p := newPlugin(api)
+				message, when, repeat := rowFields(t, p, 1)
+				status, response := submit(t, p, test.fill(message, when, repeat))
 
 				// The errors have to arrive on a successful submission: the
 				// client only reads the body to show them when it is one.
 				assert.Equal(t, 200, status)
-				assert.Contains(t, response.Errors, test.field)
+				assert.Contains(t, response.Errors, test.erroredOn(message, when, repeat))
 				assert.Empty(t, *stored, "nothing is stored")
-				assert.Empty(t, *posted, "and nothing is posted")
 			})
 		}
 	})
@@ -232,9 +332,7 @@ func TestHandleDialog(t *testing.T) {
 		api := &plugintest.API{}
 		defer api.AssertExpectations(t)
 
-		p := &Plugin{}
-		p.API = api
-		p.router = p.InitAPI()
+		p := newPlugin(api)
 
 		w := httptest.NewRecorder()
 		p.ServeHTTP(nil, w, httptest.NewRequest("POST", "/dialog", strings.NewReader("not json")))
@@ -271,7 +369,8 @@ func TestHandleDialog(t *testing.T) {
 		api, stored, _ := setupAPI(t, []Reminder{existing})
 		defer api.AssertExpectations(t)
 
-		status, response := submit(t, api, model.StringInterface{
+		p := newPlugin(api)
+		status, response := submit(t, p, model.StringInterface{
 			dialogElementRemove + existing.Id: true,
 		})
 
@@ -288,7 +387,8 @@ func TestHandleDialog(t *testing.T) {
 			api, stored, _ := setupAPI(t, []Reminder{existing})
 			defer api.AssertExpectations(t)
 
-			_, _ = submit(t, api, model.StringInterface{dialogElementRemove + existing.Id: value})
+			p := newPlugin(api)
+			_, _ = submit(t, p, model.StringInterface{dialogElementRemove + existing.Id: value})
 
 			assert.Empty(t, *stored, "ticked as %#v", value)
 		}
@@ -298,19 +398,19 @@ func TestHandleDialog(t *testing.T) {
 		existing := existingReminder(t, "standup")
 
 		for _, value := range []any{false, "false", ""} {
-			api, stored, posted := setupAPI(t, []Reminder{existing})
+			api, stored, _ := setupAPI(t, []Reminder{existing})
 			defer api.AssertExpectations(t)
 
-			status, response := submit(t, api, model.StringInterface{
+			p := newPlugin(api)
+			status, response := submit(t, p, model.StringInterface{
 				dialogElementRemove + existing.Id: value,
 			})
 
 			// Nothing ticked and nothing filled in is a submission that asks
 			// for nothing.
 			assert.Equal(t, 200, status)
-			assert.Contains(t, response.Errors, dialogElementMessage)
+			assert.Contains(t, response.Error, "schedule.error.nothing")
 			assert.Len(t, *stored, 1, "still there")
-			assert.Empty(t, *posted)
 		}
 	})
 
@@ -318,7 +418,8 @@ func TestHandleDialog(t *testing.T) {
 		api, stored, _ := setupAPI(t, nil)
 		defer api.AssertExpectations(t)
 
-		status, response := submit(t, api, model.StringInterface{
+		p := newPlugin(api)
+		status, response := submit(t, p, model.StringInterface{
 			dialogElementRemove + model.NewId(): true,
 		})
 
@@ -328,16 +429,18 @@ func TestHandleDialog(t *testing.T) {
 		assert.NotEmpty(t, refreshed(t, response), "the dialog still answers")
 	})
 
-	t.Run("one submit adds one reminder and removes another", func(t *testing.T) {
+	t.Run("one submit adds a reminder and removes another", func(t *testing.T) {
 		existing := existingReminder(t, "standup")
 		api, stored, _ := setupAPI(t, []Reminder{existing})
 		defer api.AssertExpectations(t)
 
-		status, response := submit(t, api, model.StringInterface{
+		p := newPlugin(api)
+		message, when, _ := rowFields(t, p, 1)
+
+		status, response := submit(t, p, model.StringInterface{
 			dialogElementRemove + existing.Id: true,
-			dialogElementMessage:              "propa meeting",
-			dialogElementWhen:                 "2026-11-05T14:30:00Z",
-			dialogElementRepeat:               repeatOnce,
+			message:                           "propa meeting",
+			when:                              "2026-11-05T14:30:00Z",
 		})
 
 		assert.Equal(t, 200, status)
@@ -352,16 +455,15 @@ func TestHandleDialog(t *testing.T) {
 	})
 
 	t.Run("a submit that asks for nothing says so", func(t *testing.T) {
-		api, stored, posted := setupAPI(t, nil)
+		api, stored, _ := setupAPI(t, nil)
 		defer api.AssertExpectations(t)
 
-		status, response := submit(t, api, model.StringInterface{})
+		p := newPlugin(api)
+		status, response := submit(t, p, model.StringInterface{})
 
 		assert.Equal(t, 200, status)
-		assert.Contains(t, response.Errors, dialogElementMessage)
-		assert.Contains(t, response.Errors[dialogElementMessage], "schedule.error.nothing")
+		assert.Contains(t, response.Error, "schedule.error.nothing")
 		assert.Empty(t, *stored)
-		assert.Empty(t, *posted)
 	})
 }
 

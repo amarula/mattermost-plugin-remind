@@ -78,42 +78,52 @@ func (p *Plugin) handleDialog(w http.ResponseWriter, req *http.Request) {
 	T, _ := p.translation(user)
 	location := p.location(user)
 
-	message := strings.TrimSpace(submissionString(request.Submission, dialogElementMessage))
-	repeat := dialogRepeat(submissionString(request.Submission, dialogElementRepeat))
-	whenValue := submissionString(request.Submission, dialogElementWhen)
 	target := p.dialogTarget(user, submissionString(request.Submission, dialogElementTarget))
 
-	// One submit adds a reminder when the fields are filled in and removes the
-	// ones that were ticked. A submission that asks for neither is told so.
-	addRequested := message != "" || whenValue != ""
+	// One submit adds every row that was filled in and removes the reminders
+	// that were ticked. A submission that asks for neither is told so.
+	var toAdd []dialogRow
+	for _, row := range dialogRows(request.Submission) {
+		if row.filled() {
+			toAdd = append(toAdd, row)
+		}
+	}
 	ticked := tickedReminderIDs(request.Submission)
 
 	// What cannot be acted on is answered on the field it belongs to, which is
 	// what keeps the dialog open with what was typed still in it. Failures used
 	// to be swallowed into the log, and the dialog simply closed.
 	fieldErrors := map[string]string{}
-	if addRequested {
-		if message == "" {
-			fieldErrors[dialogElementMessage] = T("schedule.error.message")
+	for _, row := range toAdd {
+		if row.message == "" {
+			fieldErrors[row.messageElement] = T("schedule.error.message")
+			continue
 		}
 
-		picked, whenErr := parseDialogDateTime(whenValue, location)
+		if row.when == "" {
+			fieldErrors[row.whenElement] = T("schedule.error.when")
+			continue
+		}
+
+		picked, whenErr := parseDialogDateTime(row.when, location)
 		switch {
-		case whenValue == "":
-			fieldErrors[dialogElementWhen] = T("schedule.error.when")
 		case whenErr != nil:
-			fieldErrors[dialogElementWhen] = T("schedule.error.when.format")
-		case repeat == repeatOnce && !picked.After(time.Now()):
-			fieldErrors[dialogElementWhen] = T("schedule.error.when.past")
+			fieldErrors[row.whenElement] = T("schedule.error.when.format")
+		case row.repeat == repeatOnce && !picked.After(time.Now()):
+			fieldErrors[row.whenElement] = T("schedule.error.when.past")
 		}
+	}
 
-		// The engine refuses a repeating reminder aimed at another user; it is
-		// refused here first, where the user can see why.
-		if repeat != repeatOnce && strings.HasPrefix(target, "@") && target != T("me") {
-			fieldErrors[dialogElementTarget] = T("schedule.error.target")
+	// The engine refuses a repeating reminder aimed at another user; it is
+	// refused here first, where the user can see why. The target belongs to the
+	// submission rather than to a row, so this answers on the target itself.
+	if target != T("me") && strings.HasPrefix(target, "@") {
+		for _, row := range toAdd {
+			if row.repeat != repeatOnce {
+				fieldErrors[dialogElementTarget] = T("schedule.error.target")
+				break
+			}
 		}
-	} else if len(ticked) == 0 {
-		fieldErrors[dialogElementMessage] = T("schedule.error.nothing")
 	}
 
 	if len(fieldErrors) > 0 {
@@ -121,35 +131,48 @@ func (p *Plugin) handleDialog(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if addRequested {
-		picked, _ := parseDialogDateTime(whenValue, location)
+	if len(toAdd) == 0 && len(ticked) == 0 {
+		writeSubmitDialogResponse(w, &model.SubmitDialogResponse{Error: T("schedule.error.nothing")})
+		return
+	}
+
+	for _, row := range toAdd {
+		picked, _ := parseDialogDateTime(row.when, location)
 
 		r := &ReminderRequest{
 			TeamId:   request.TeamId,
 			Username: user.Username,
-			Payload:  message,
+			Payload:  row.message,
 			Reminder: Reminder{
 				Id:        model.NewId(),
 				TeamId:    request.TeamId,
 				Username:  user.Username,
-				Message:   message,
+				Message:   row.message,
 				Completed: p.emptyTime,
 				Target:    target,
-				When:      p.composeWhen(user, picked, repeat),
+				When:      p.composeWhen(user, picked, row.repeat),
 			},
 		}
 
 		// Adding comes first: if it fails, nothing has been removed and the
-		// ticks are still in the dialog for another try.
+		// rows are still in the dialog for another try.
 		if cErr := p.CreateOccurrences(r); cErr != nil {
 			p.API.LogError(cErr.Error())
-			writeSubmitDialogResponse(w, &model.SubmitDialogResponse{Error: T("exception.response")})
+			writeSubmitDialogResponse(w, &model.SubmitDialogResponse{
+				Error: T("exception.response"),
+				Type:  string(model.SubmitDialogResponseTypeForm),
+				Form:  p.refreshedDialog(user),
+			})
 			return
 		}
 
 		if rErr := p.UpsertReminder(r); rErr != nil {
 			p.API.LogError(rErr.Error())
-			writeSubmitDialogResponse(w, &model.SubmitDialogResponse{Error: T("exception.response")})
+			writeSubmitDialogResponse(w, &model.SubmitDialogResponse{
+				Error: T("exception.response"),
+				Type:  string(model.SubmitDialogResponseTypeForm),
+				Form:  p.refreshedDialog(user),
+			})
 			return
 		}
 	}
@@ -170,11 +193,9 @@ func (p *Plugin) handleDialog(w http.ResponseWriter, req *http.Request) {
 	// does not know the form response closes the dialog instead, which is what it
 	// did before. /remind list is still there for the buttons a dialog cannot
 	// carry.
-	dialog := p.scheduleDialog(user)
-
 	writeSubmitDialogResponse(w, &model.SubmitDialogResponse{
 		Type: string(model.SubmitDialogResponseTypeForm),
-		Form: &dialog,
+		Form: p.refreshedDialog(user),
 	})
 }
 

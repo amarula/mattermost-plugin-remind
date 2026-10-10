@@ -117,65 +117,21 @@ func (p *Plugin) scheduleDialog(user *model.User) model.Dialog {
 	// The reminders come first: ticking one marks it for removal, and filling in
 	// the fields below adds one. A single submit does both, so every field is
 	// optional and the rule between them lives in the handler.
+	// The rows are named after a suffix that changes every time the dialog is
+	// built, so a client that keeps the values of fields whose names match hands
+	// back empty rows rather than the ones it has just submitted.
+	suffix := model.NewId()[:8]
+
 	elements := p.dialogReminderElements(user, p.GetReminders(user.Username))
+	for row := 1; row <= dialogNewReminderRows; row++ {
+		elements = append(elements, p.dialogRowElements(user, suffix, row, timezone)...)
+	}
+
 	elements = append(elements,
-		model.DialogElement{
-			DisplayName: T("schedule.message"),
-			Name:        dialogElementMessage,
-			Type:        "text",
-			SubType:     "text",
-			HelpText:    T("schedule.message.help"),
-			Optional:    true,
-		},
-		model.DialogElement{
-			DisplayName: T("schedule.when"),
-			Name:        dialogElementWhen,
-			Type:        "datetime",
-			HelpText:    p.whenHelpText(user, timezone),
-			DateTimeConfig: &model.DialogDateTimeConfig{
-				// "today" rather than an instant: the field is validated as a date
-				// and rendered in the configured zone, and the authoritative check
-				// that the time has not passed happens on submission.
-				MinDate:          "today",
-				TimeInterval:     15,
-				LocationTimezone: timezone,
-				ManualTimeEntry:  true,
-			},
-		},
-		model.DialogElement{
-			DisplayName: T("schedule.repeat"),
-			Name:        dialogElementRepeat,
-			Type:        "select",
-			SubType:     "select",
-			Default:     repeatOnce,
-			HelpText:    T("schedule.repeat.help"),
-			Options: []*model.PostActionOptions{
-				{
-					Text:  T("schedule.repeat.once"),
-					Value: repeatOnce,
-				},
-				{
-					Text:  T("schedule.repeat.daily"),
-					Value: repeatDaily,
-				},
-				{
-					Text:  T("schedule.repeat.weekdays"),
-					Value: repeatWeekdays,
-				},
-				{
-					Text:  T("schedule.repeat.weekly"),
-					Value: repeatWeekly,
-				},
-				{
-					Text:  T("schedule.repeat.monthly"),
-					Value: repeatMonthly,
-				},
-			},
-		},
 		model.DialogElement{
 			DisplayName: T("schedule.target"),
 			Name:        dialogElementTarget,
-			HelpText:    T("schedule.target.help"),
+			HelpText:    T("schedule.target.help") + " " + T("schedule.target.rows"),
 			Placeholder: "me",
 			Type:        "text",
 			SubType:     "text",
@@ -243,4 +199,75 @@ func (p *Plugin) triggerRemindersSafely() {
 	}()
 
 	p.TriggerReminders()
+}
+
+// dialogRowElements is one row of fields for a new reminder: what to be reminded
+// of, when, and how it repeats if it does. The first row carries the guidance,
+// which is the same for every row.
+func (p *Plugin) dialogRowElements(user *model.User, suffix string, row int, timezone string) []model.DialogElement {
+	T, _ := p.translation(user)
+
+	help := func(text string) string {
+		if row > 1 {
+			return ""
+		}
+
+		return text
+	}
+
+	return []model.DialogElement{
+		{
+			DisplayName: T("schedule.message"),
+			Name:        dialogRowName(dialogElementMessage, suffix, row),
+			Type:        "text",
+			SubType:     "text",
+			HelpText:    help(T("schedule.message.help")),
+			Optional:    true,
+		},
+		{
+			DisplayName: T("schedule.when"),
+			Name:        dialogRowName(dialogElementWhen, suffix, row),
+			Type:        "datetime",
+			HelpText:    help(p.whenHelpText(user, timezone)),
+			DateTimeConfig: &model.DialogDateTimeConfig{
+				// "today" rather than an instant: the field is validated as a date
+				// and rendered in the configured zone, and the authoritative check
+				// that the time has not passed happens on submission.
+				MinDate:          "today",
+				TimeInterval:     15,
+				LocationTimezone: timezone,
+				ManualTimeEntry:  true,
+			},
+		},
+		{
+			DisplayName: T("schedule.repeat"),
+			Name:        dialogRowName(dialogElementRepeat, suffix, row),
+			Type:        "select",
+			SubType:     "select",
+			Default:     repeatOnce,
+			HelpText:    help(T("schedule.repeat.help")),
+			Options: []*model.PostActionOptions{
+				{
+					Text:  T("schedule.repeat.once"),
+					Value: repeatOnce,
+				},
+				{
+					Text:  T("schedule.repeat.daily"),
+					Value: repeatDaily,
+				},
+				{
+					Text:  T("schedule.repeat.weekdays"),
+					Value: repeatWeekdays,
+				},
+				{
+					Text:  T("schedule.repeat.weekly"),
+					Value: repeatWeekly,
+				},
+				{
+					Text:  T("schedule.repeat.monthly"),
+					Value: repeatMonthly,
+				},
+			},
+		},
+	}
 }
