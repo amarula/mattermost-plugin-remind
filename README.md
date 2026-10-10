@@ -20,6 +20,13 @@ _requires Mattermost v11.0.0 or greater._
 ### Usage
 
 * `/remind` - opens up an [interactive dialog](https://docs.mattermost.com/developer/interactive-dialogs.html) to schedule a reminder
+
+  The dialog lists the reminders you have. Tick one to remove it, and fill in a
+  message and a time to add one — a single Save does both. The time comes from a
+  date and time picker in your own time zone, with a Repeat beside it for
+  reminders that come back: every day, every weekday, every week or every month.
+  A repeat starts at the next matching time rather than at the one picked.
+
 * `/remind help` - displays help examples
 * `/remind list` - displays a list of reminders
 * `/remind [who] [what] [when]`

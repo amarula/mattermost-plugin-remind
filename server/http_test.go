@@ -28,11 +28,12 @@ func TestHandleDialog(t *testing.T) {
 	// A Thursday, so a weekly repeat has a weekday to name.
 	picked := time.Date(2026, time.November, 5, 14, 30, 0, 0, time.UTC)
 
-	// setupAPI records what the submission stores and posts.
-	setupAPI := func(t *testing.T) (*plugintest.API, *[]Reminder, *[]*model.Post) {
+	// setupAPI records what the submission stores and posts, starting from the
+	// reminders the user already has.
+	setupAPI := func(t *testing.T, existing []Reminder) (*plugintest.API, *[]Reminder, *[]*model.Post) {
 		t.Helper()
 
-		var stored []Reminder
+		stored := existing
 		var posted []*model.Post
 
 		api := &plugintest.API{}
@@ -43,6 +44,11 @@ func TestHandleDialog(t *testing.T) {
 		api.On("GetUser", mock.Anything).Return(user, nil)
 		// Only the paths that store a reminder look the target up.
 		api.On("GetUserByUsername", mock.Anything).Return(user, nil).Maybe()
+		// The stored list is read back as it stands, so a submit that adds and
+		// removes sees its own write, the way the real store would.
+		api.On("KVGet", user.Username).Return(func(string) ([]byte, *model.AppError) {
+			return mustMarshal(t, stored), nil
+		}).Maybe()
 		api.On("KVGet", mock.Anything).Return(nil, nil).Maybe()
 		// The reminder list is written under the user's name; the fire-time
 		// buckets it also writes are not what these tests are about.
@@ -84,7 +90,7 @@ func TestHandleDialog(t *testing.T) {
 	}
 
 	t.Run("a one-off is stored at the instant that was picked", func(t *testing.T) {
-		api, stored, posted := setupAPI(t)
+		api, stored, posted := setupAPI(t, nil)
 		defer api.AssertExpectations(t)
 
 		status, response := submit(t, api, model.StringInterface{
@@ -108,7 +114,7 @@ func TestHandleDialog(t *testing.T) {
 	})
 
 	t.Run("a wall clock is read in the user's zone", func(t *testing.T) {
-		api, stored, _ := setupAPI(t)
+		api, stored, _ := setupAPI(t, nil)
 		defer api.AssertExpectations(t)
 
 		status, _ := submit(t, api, model.StringInterface{
@@ -125,7 +131,7 @@ func TestHandleDialog(t *testing.T) {
 	})
 
 	t.Run("a repeating one carries its phrase for the tick to re-read", func(t *testing.T) {
-		api, stored, _ := setupAPI(t)
+		api, stored, _ := setupAPI(t, nil)
 		defer api.AssertExpectations(t)
 
 		status, _ := submit(t, api, model.StringInterface{
@@ -187,7 +193,7 @@ func TestHandleDialog(t *testing.T) {
 
 		for _, test := range tests {
 			t.Run(test.name, func(t *testing.T) {
-				api, stored, posted := setupAPI(t)
+				api, stored, posted := setupAPI(t, nil)
 				defer api.AssertExpectations(t)
 
 				status, response := submit(t, api, test.submission)
@@ -215,6 +221,125 @@ func TestHandleDialog(t *testing.T) {
 		p.ServeHTTP(nil, w, httptest.NewRequest("POST", "/dialog", strings.NewReader("not json")))
 
 		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	// A reminder that is still going to fire, as the dialog lists it.
+	existingReminder := func(t *testing.T, message string) Reminder {
+		t.Helper()
+
+		reminder := Reminder{
+			Id:        model.NewId(),
+			TeamId:    model.NewId(),
+			Username:  user.Username,
+			Message:   message,
+			Target:    "me",
+			When:      "in 1 hour",
+			Completed: time.Time{}.AddDate(1, 1, 1),
+		}
+		reminder.Occurrences = []Occurrence{{
+			Hostname:   "testhost",
+			Id:         model.NewId(),
+			Username:   user.Username,
+			ReminderId: reminder.Id,
+			Occurrence: time.Now().UTC().Round(time.Second).Add(time.Hour),
+		}}
+
+		return reminder
+	}
+
+	t.Run("ticking a reminder removes it", func(t *testing.T) {
+		existing := existingReminder(t, "standup")
+		api, stored, posted := setupAPI(t, []Reminder{existing})
+		defer api.AssertExpectations(t)
+
+		status, response := submit(t, api, model.StringInterface{
+			dialogElementRemove + existing.Id: true,
+		})
+
+		assert.Equal(t, 200, status)
+		assert.Empty(t, response.Errors)
+		assert.Empty(t, *stored, "the reminder is gone")
+		// The reply is the list, which is where the remaining buttons live.
+		require.Len(t, *posted, 1)
+	})
+
+	t.Run("a tick arrives as a bool or as the word true", func(t *testing.T) {
+		for _, value := range []any{true, "true", "TRUE"} {
+			existing := existingReminder(t, "standup")
+			api, stored, _ := setupAPI(t, []Reminder{existing})
+			defer api.AssertExpectations(t)
+
+			_, _ = submit(t, api, model.StringInterface{dialogElementRemove + existing.Id: value})
+
+			assert.Empty(t, *stored, "ticked as %#v", value)
+		}
+	})
+
+	t.Run("a box that was not ticked removes nothing", func(t *testing.T) {
+		existing := existingReminder(t, "standup")
+
+		for _, value := range []any{false, "false", ""} {
+			api, stored, posted := setupAPI(t, []Reminder{existing})
+			defer api.AssertExpectations(t)
+
+			status, response := submit(t, api, model.StringInterface{
+				dialogElementRemove + existing.Id: value,
+			})
+
+			// Nothing ticked and nothing filled in is a submission that asks
+			// for nothing.
+			assert.Equal(t, 200, status)
+			assert.Contains(t, response.Errors, dialogElementMessage)
+			assert.Len(t, *stored, 1, "still there")
+			assert.Empty(t, *posted)
+		}
+	})
+
+	t.Run("a reminder that is gone by the time the dialog is submitted is skipped", func(t *testing.T) {
+		api, stored, posted := setupAPI(t, nil)
+		defer api.AssertExpectations(t)
+
+		status, response := submit(t, api, model.StringInterface{
+			dialogElementRemove + model.NewId(): true,
+		})
+
+		assert.Equal(t, 200, status)
+		assert.Empty(t, response.Errors)
+		assert.Empty(t, *stored)
+		require.Len(t, *posted, 1, "the list still answers")
+	})
+
+	t.Run("one submit adds one reminder and removes another", func(t *testing.T) {
+		existing := existingReminder(t, "standup")
+		api, stored, posted := setupAPI(t, []Reminder{existing})
+		defer api.AssertExpectations(t)
+
+		status, response := submit(t, api, model.StringInterface{
+			dialogElementRemove + existing.Id: true,
+			dialogElementMessage:              "propa meeting",
+			dialogElementWhen:                 "2026-11-05T14:30:00Z",
+			dialogElementRepeat:               repeatOnce,
+		})
+
+		assert.Equal(t, 200, status)
+		assert.Empty(t, response.Errors)
+		require.Len(t, *stored, 1)
+		assert.Equal(t, "propa meeting", (*stored)[0].Message)
+		assert.NotEqual(t, existing.Id, (*stored)[0].Id)
+		require.Len(t, *posted, 1, "one reply: the list")
+	})
+
+	t.Run("a submit that asks for nothing says so", func(t *testing.T) {
+		api, stored, posted := setupAPI(t, nil)
+		defer api.AssertExpectations(t)
+
+		status, response := submit(t, api, model.StringInterface{})
+
+		assert.Equal(t, 200, status)
+		assert.Contains(t, response.Errors, dialogElementMessage)
+		assert.Contains(t, response.Errors[dialogElementMessage], "schedule.error.nothing")
+		assert.Empty(t, *stored)
+		assert.Empty(t, *posted)
 	})
 }
 

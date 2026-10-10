@@ -83,28 +83,37 @@ func (p *Plugin) handleDialog(w http.ResponseWriter, req *http.Request) {
 	whenValue := submissionString(request.Submission, dialogElementWhen)
 	target := p.dialogTarget(user, submissionString(request.Submission, dialogElementTarget))
 
+	// One submit adds a reminder when the fields are filled in and removes the
+	// ones that were ticked. A submission that asks for neither is told so.
+	addRequested := message != "" || whenValue != ""
+	ticked := tickedReminderIDs(request.Submission)
+
 	// What cannot be acted on is answered on the field it belongs to, which is
 	// what keeps the dialog open with what was typed still in it. Failures used
 	// to be swallowed into the log, and the dialog simply closed.
 	fieldErrors := map[string]string{}
-	if message == "" {
-		fieldErrors[dialogElementMessage] = T("schedule.error.message")
-	}
+	if addRequested {
+		if message == "" {
+			fieldErrors[dialogElementMessage] = T("schedule.error.message")
+		}
 
-	picked, whenErr := parseDialogDateTime(whenValue, location)
-	switch {
-	case whenValue == "":
-		fieldErrors[dialogElementWhen] = T("schedule.error.when")
-	case whenErr != nil:
-		fieldErrors[dialogElementWhen] = T("schedule.error.when.format")
-	case repeat == repeatOnce && !picked.After(time.Now()):
-		fieldErrors[dialogElementWhen] = T("schedule.error.when.past")
-	}
+		picked, whenErr := parseDialogDateTime(whenValue, location)
+		switch {
+		case whenValue == "":
+			fieldErrors[dialogElementWhen] = T("schedule.error.when")
+		case whenErr != nil:
+			fieldErrors[dialogElementWhen] = T("schedule.error.when.format")
+		case repeat == repeatOnce && !picked.After(time.Now()):
+			fieldErrors[dialogElementWhen] = T("schedule.error.when.past")
+		}
 
-	// The engine refuses a repeating reminder aimed at another user; it is
-	// refused here first, where the user can see why.
-	if repeat != repeatOnce && strings.HasPrefix(target, "@") && target != T("me") {
-		fieldErrors[dialogElementTarget] = T("schedule.error.target")
+		// The engine refuses a repeating reminder aimed at another user; it is
+		// refused here first, where the user can see why.
+		if repeat != repeatOnce && strings.HasPrefix(target, "@") && target != T("me") {
+			fieldErrors[dialogElementTarget] = T("schedule.error.target")
+		}
+	} else if len(ticked) == 0 {
+		fieldErrors[dialogElementMessage] = T("schedule.error.nothing")
 	}
 
 	if len(fieldErrors) > 0 {
@@ -112,99 +121,52 @@ func (p *Plugin) handleDialog(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	r := &ReminderRequest{
-		TeamId:   request.TeamId,
-		Username: user.Username,
-		Payload:  message,
-		Reminder: Reminder{
-			Id:        model.NewId(),
-			TeamId:    request.TeamId,
-			Username:  user.Username,
-			Message:   message,
-			Completed: p.emptyTime,
-			Target:    target,
-			When:      p.composeWhen(user, picked, repeat),
-		},
-	}
+	if addRequested {
+		picked, _ := parseDialogDateTime(whenValue, location)
 
-	if cErr := p.CreateOccurrences(r); cErr != nil {
-		p.API.LogError(cErr.Error())
-		writeSubmitDialogResponse(w, &model.SubmitDialogResponse{Error: T("exception.response")})
-		return
-	}
-
-	if rErr := p.UpsertReminder(r); rErr != nil {
-		p.API.LogError(rErr.Error())
-		writeSubmitDialogResponse(w, &model.SubmitDialogResponse{Error: T("exception.response")})
-		return
-	}
-
-	if r.Reminder.Target == T("me") {
-		r.Reminder.Target = T("you")
-	}
-
-	useTo := strings.HasPrefix(r.Reminder.Message, T("to"))
-	var useToString string
-	if useTo {
-		useToString = " " + T("to")
-	} else {
-		useToString = ""
-	}
-
-	t := ""
-	if len(r.Reminder.Occurrences) > 0 {
-		t = r.Reminder.Occurrences[0].Occurrence.In(location).Format(time.RFC3339)
-	}
-	var responseParameters = map[string]interface{}{
-		"Target":  r.Reminder.Target,
-		"UseTo":   useToString,
-		"Message": r.Reminder.Message,
-		"When": p.formatWhen(
-			r.Username,
-			r.Reminder.When,
-			t,
-			false,
-		),
-	}
-
-	reminder := &model.Post{
-		ChannelId: request.ChannelId,
-		UserId:    p.botUserID,
-		Props: model.StringInterface{
-			"attachments": []*model.MessageAttachment{
-				{
-					Text: T("schedule.response", responseParameters),
-					Actions: []*model.PostAction{
-						{
-							Integration: &model.PostActionIntegration{
-								Context: model.StringInterface{
-									"reminder_id":   r.Reminder.Id,
-									"occurrence_id": r.Reminder.Occurrences[0].Id,
-									"action":        "delete/ephemeral",
-								},
-								URL: fmt.Sprintf("/plugins/%s/delete/ephemeral", PluginID),
-							},
-							Type: model.PostActionTypeButton,
-							Name: T("button.delete"),
-						},
-						{
-							Integration: &model.PostActionIntegration{
-								Context: model.StringInterface{
-									"reminder_id":   r.Reminder.Id,
-									"occurrence_id": r.Reminder.Occurrences[0].Id,
-									"action":        "view/ephemeral",
-								},
-								URL: fmt.Sprintf("/plugins/%s/view/ephemeral", PluginID),
-							},
-							Type: model.PostActionTypeButton,
-							Name: T("button.view.reminders"),
-						},
-					},
-				},
+		r := &ReminderRequest{
+			TeamId:   request.TeamId,
+			Username: user.Username,
+			Payload:  message,
+			Reminder: Reminder{
+				Id:        model.NewId(),
+				TeamId:    request.TeamId,
+				Username:  user.Username,
+				Message:   message,
+				Completed: p.emptyTime,
+				Target:    target,
+				When:      p.composeWhen(user, picked, repeat),
 			},
-		},
+		}
+
+		// Adding comes first: if it fails, nothing has been removed and the
+		// ticks are still in the dialog for another try.
+		if cErr := p.CreateOccurrences(r); cErr != nil {
+			p.API.LogError(cErr.Error())
+			writeSubmitDialogResponse(w, &model.SubmitDialogResponse{Error: T("exception.response")})
+			return
+		}
+
+		if rErr := p.UpsertReminder(r); rErr != nil {
+			p.API.LogError(rErr.Error())
+			writeSubmitDialogResponse(w, &model.SubmitDialogResponse{Error: T("exception.response")})
+			return
+		}
 	}
-	p.API.SendEphemeralPost(user.Id, reminder)
+
+	reminders := p.GetReminders(user.Username)
+	for _, id := range ticked {
+		reminder, found := findReminderByID(reminders, id)
+		if !found {
+			// Completed or deleted while the dialog was open.
+			continue
+		}
+
+		p.removeReminder(user, reminder)
+	}
+
+	// The answer is the list, with its own buttons for everything else.
+	p.API.SendEphemeralPost(user.Id, p.ListReminders(user, request.ChannelId))
 
 	writeSubmitDialogResponse(w, &model.SubmitDialogResponse{})
 }

@@ -49,7 +49,7 @@
   },
   {
     "id": "schedule.message.help",
-    "translation": "What to be reminded of."
+    "translation": "Fill this in with a time to add a reminder, or tick one above to remove it."
   },
   {
     "id": "schedule.repeat",
@@ -82,6 +82,10 @@
   {
     "id": "schedule.error.message",
     "translation": "A reminder needs a message."
+  },
+  {
+    "id": "schedule.error.nothing",
+    "translation": "Fill in what the reminder is for and when, or tick the reminders to remove."
   },
   {
     "id": "schedule.error.when",

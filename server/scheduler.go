@@ -112,6 +112,75 @@ func (p *Plugin) InteractiveSchedule(triggerID string, user *model.User) {
 	// composes is read in. Empty when the user has set none.
 	timezone := p.dialogTimezone(user)
 
+	// The reminders come first: ticking one marks it for removal, and filling in
+	// the fields below adds one. A single submit does both, so every field is
+	// optional and the rule between them lives in the handler.
+	elements := p.dialogReminderElements(user, p.GetReminders(user.Username))
+	elements = append(elements,
+		model.DialogElement{
+			DisplayName: T("schedule.message"),
+			Name:        dialogElementMessage,
+			Type:        "text",
+			SubType:     "text",
+			HelpText:    T("schedule.message.help"),
+			Optional:    true,
+		},
+		model.DialogElement{
+			DisplayName: T("schedule.when"),
+			Name:        dialogElementWhen,
+			Type:        "datetime",
+			HelpText:    p.whenHelpText(user, timezone),
+			DateTimeConfig: &model.DialogDateTimeConfig{
+				// "today" rather than an instant: the field is validated as a date
+				// and rendered in the configured zone, and the authoritative check
+				// that the time has not passed happens on submission.
+				MinDate:          "today",
+				TimeInterval:     15,
+				LocationTimezone: timezone,
+				ManualTimeEntry:  true,
+			},
+		},
+		model.DialogElement{
+			DisplayName: T("schedule.repeat"),
+			Name:        dialogElementRepeat,
+			Type:        "select",
+			SubType:     "select",
+			Default:     repeatOnce,
+			HelpText:    T("schedule.repeat.help"),
+			Options: []*model.PostActionOptions{
+				{
+					Text:  T("schedule.repeat.once"),
+					Value: repeatOnce,
+				},
+				{
+					Text:  T("schedule.repeat.daily"),
+					Value: repeatDaily,
+				},
+				{
+					Text:  T("schedule.repeat.weekdays"),
+					Value: repeatWeekdays,
+				},
+				{
+					Text:  T("schedule.repeat.weekly"),
+					Value: repeatWeekly,
+				},
+				{
+					Text:  T("schedule.repeat.monthly"),
+					Value: repeatMonthly,
+				},
+			},
+		},
+		model.DialogElement{
+			DisplayName: T("schedule.target"),
+			Name:        dialogElementTarget,
+			HelpText:    T("schedule.target.help"),
+			Placeholder: "me",
+			Type:        "text",
+			SubType:     "text",
+			Optional:    true,
+		},
+	)
+
 	dialogRequest := model.OpenDialogRequest{
 		TriggerId: triggerID,
 		URL:       fmt.Sprintf("/plugins/%s/dialog", PluginID),
@@ -119,69 +188,7 @@ func (p *Plugin) InteractiveSchedule(triggerID string, user *model.User) {
 			Title:       T("schedule.reminder"),
 			CallbackId:  model.NewId(),
 			SubmitLabel: T("button.schedule"),
-			Elements: []model.DialogElement{
-				{
-					DisplayName: T("schedule.message"),
-					Name:        dialogElementMessage,
-					Type:        "text",
-					SubType:     "text",
-					HelpText:    T("schedule.message.help"),
-				},
-				{
-					DisplayName: T("schedule.when"),
-					Name:        dialogElementWhen,
-					Type:        "datetime",
-					HelpText:    p.whenHelpText(user, timezone),
-					DateTimeConfig: &model.DialogDateTimeConfig{
-						// "today" rather than an instant: the field is validated as a
-						// date and rendered in the configured zone, and the authoritative
-						// check that the time has not passed happens on submission.
-						MinDate:          "today",
-						TimeInterval:     15,
-						LocationTimezone: timezone,
-						ManualTimeEntry:  true,
-					},
-				},
-				{
-					DisplayName: T("schedule.repeat"),
-					Name:        dialogElementRepeat,
-					Type:        "select",
-					SubType:     "select",
-					Default:     repeatOnce,
-					HelpText:    T("schedule.repeat.help"),
-					Options: []*model.PostActionOptions{
-						{
-							Text:  T("schedule.repeat.once"),
-							Value: repeatOnce,
-						},
-						{
-							Text:  T("schedule.repeat.daily"),
-							Value: repeatDaily,
-						},
-						{
-							Text:  T("schedule.repeat.weekdays"),
-							Value: repeatWeekdays,
-						},
-						{
-							Text:  T("schedule.repeat.weekly"),
-							Value: repeatWeekly,
-						},
-						{
-							Text:  T("schedule.repeat.monthly"),
-							Value: repeatMonthly,
-						},
-					},
-				},
-				{
-					DisplayName: T("schedule.target"),
-					Name:        dialogElementTarget,
-					HelpText:    T("schedule.target.help"),
-					Placeholder: "me",
-					Type:        "text",
-					SubType:     "text",
-					Optional:    true,
-				},
-			},
+			Elements:    elements,
 		},
 	}
 	if pErr := p.API.OpenInteractiveDialog(dialogRequest); pErr != nil {

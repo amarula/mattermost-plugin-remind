@@ -30,10 +30,10 @@ func occurrenceIDs(t *testing.T, payload []byte) []string {
 	return ids
 }
 
-func mustMarshal(t *testing.T, occurrences []Occurrence) []byte {
+func mustMarshal(t *testing.T, value any) []byte {
 	t.Helper()
 
-	payload, err := json.Marshal(occurrences)
+	payload, err := json.Marshal(value)
 	require.NoError(t, err)
 
 	return payload

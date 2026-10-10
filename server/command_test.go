@@ -27,6 +27,9 @@ func TestHandleCommand(t *testing.T) {
 			api.On("LogError", mock.Anything, mock.Anything, mock.Anything).Maybe()
 			api.On("LogInfo", mock.Anything).Maybe()
 			api.On("GetUser", mock.Anything).Return(user, nil)
+			// The dialog lists the user's reminders, so it reads them first.
+			api.On("GetUserByUsername", mock.Anything).Return(user, nil)
+			api.On("KVGet", mock.Anything).Return(nil, nil)
 			api.On("OpenInteractiveDialog", mock.Anything).Return(nil)
 
 			return api
